@@ -104,7 +104,9 @@ Curtain 是一种**视觉隐私遮罩**，并非 Windows 系统锁屏、安全�
 
 ## 反馈与开源计划
 
-源码仓库公开后，可通过 GitHub Issues / Discussions 反馈问题和想法。GitHub Releases 尚未建立；beta 安装包由上方官方更新域名提供。
+Curtain 源码已在 GitHub 公开，并采用 **GPL-3.0-only** 许可证。欢迎通过 [GitHub Issues](https://github.com/Cheney-0821/Curtain/issues) 报告问题或提出改进建议。
+
+当前测试版安装包与应用内更新源由上方官方更新域名提供。GitHub Releases 尚未发布；后续版本发布将绑定明确的版本标签，并对应到可核验的源码提交。
 
 ## 许可
 

@@ -105,7 +105,9 @@ Curtain is a **visual privacy overlay**, not a Windows sign-in lock, a defense a
 
 ## Feedback and open source
 
-Once the source repository is public, use GitHub Issues and Discussions to report bugs or share ideas. GitHub Releases are not available yet; beta installers are served through the official update domain above.
+Curtain's source code is publicly available under **GPL-3.0-only**. Use [GitHub Issues](https://github.com/Cheney-0821/Curtain/issues) to report bugs or suggest improvements.
+
+The current beta installer and in-app update feed are hosted on the official update domain above. GitHub Releases have not been published yet; upcoming releases will be tied to version tags and identify the corresponding source commit.
 
 ## License
 

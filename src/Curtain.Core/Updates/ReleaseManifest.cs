@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 
 namespace Curtain.Core.Updates;
 
-/// <summary>Future R2 release metadata schema. No downloader is enabled in 0.1.0.</summary>
+/// <summary>Reserved metadata schema for a future signed-update path; the active updater uses Velopack.</summary>
 public sealed record ReleaseManifest(
     [property: JsonPropertyName("schema_version")] int SchemaVersion,
     [property: JsonPropertyName("version")] string Version,

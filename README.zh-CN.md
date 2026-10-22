@@ -13,10 +13,10 @@
   <img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-0078D4?style=flat-square" />
   <img alt="WinUI 3" src="https://img.shields.io/badge/WinUI-3-536DFE?style=flat-square" />
   <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-6A4C93?style=flat-square" />
-  <img alt="Beta 0.2.0-beta.5.1" src="https://img.shields.io/badge/release-beta.5.1-64748b?style=flat-square" />
+  <img alt="Beta 0.2.0-beta.5.2" src="https://img.shields.io/badge/release-beta.5.2-64748b?style=flat-square" />
 </p>
 
-**[下载 Windows 测试版](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.2.0-beta.5.1-Setup.exe)** · **[English](README.md)**
+**[下载 Windows 测试版](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.2.0-beta.5.2-Setup.exe)** · **[GitHub 发布页](https://github.com/Cheney-0821/Curtain/releases/tag/v0.2.0-beta.5.2)** · **[English](README.md)**
 
 <sub>Windows x64 · 安装包尚未进行代码签名 · 已在 Windows 11 测试</sub>
 
@@ -80,11 +80,11 @@ Curtain 可以根据键盘、鼠标的无操作时长自动开启保护。**什�
 
 ## 安装与使用
 
-1. 从上方下载 [Windows x64 测试版安装程序](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.2.0-beta.5.1-Setup.exe)。安装包目前**未签名**，Windows 可能提示未知发布者；请核实来源，不要为了安装关闭系统安全防护。
+1. 从上方下载 [Windows x64 测试版安装程序](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.2.0-beta.5.2-Setup.exe)。安装包目前**未签名**，Windows 可能提示未知发布者；请核实来源，不要为了安装关闭系统安全防护。
 2. 启动 Curtain，选择「添加窗口」或「保护整个屏幕」。
 3. 如需离开工位后自动保护，在「设置」中开启空闲自动保护并选择时长及范围。
 
-> beta.5.1 安装包供体验使用；此源码候选尚未被确认可复现该安装包。
+> 本版本使用的源码提交 SHA 会记录在 GitHub Release 发布说明中。
 
 <details>
 <summary><b>快捷键与兼容性</b></summary>
@@ -102,11 +102,11 @@ Curtain 面向 Windows x64。项目最低目标为 Windows 10 2004（build 19041
 
 Curtain 是一种**视觉隐私遮罩**，并非 Windows 系统锁屏、安全防线，也不能阻止其他程序截图或录屏。输入法候选窗等独立顶层界面可能仍显示在遮罩上方。目前不能调节实际磨砂强度；退出并重新启动 Curtain 后，已添加的运行中窗口列表不会自动恢复。
 
-## 反馈与开源计划
+## 反馈与开源
 
 Curtain 源码已在 GitHub 公开，并采用 **GPL-3.0-only** 许可证。欢迎通过 [GitHub Issues](https://github.com/Cheney-0821/Curtain/issues) 报告问题或提出改进建议。
 
-当前测试版安装包与应用内更新源由上方官方更新域名提供。GitHub Releases 尚未发布；后续版本发布将绑定明确的版本标签，并对应到可核验的源码提交。
+当前测试版安装包与应用内更新源由上方官方更新域名提供。请查看 [GitHub 发布页](https://github.com/Cheney-0821/Curtain/releases/tag/v0.2.0-beta.5.2) 获取版本说明、源码提交 SHA、安装包 SHA-256，以及 GitHub 镜像下载。
 
 ## 许可
 

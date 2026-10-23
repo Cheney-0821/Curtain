@@ -30,7 +30,7 @@ internal sealed class CurtainManager : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (!NativeMethods.IsSelectableWindow(hwnd) || TargetWindow.Read(hwnd) is not { } identity)
-            throw new InvalidOperationException("这个窗口目前无法保护，请选择普通应用窗口。");
+            throw new InvalidOperationException("WindowNotSelectable");
         if (_sessions.TryGetValue(identity.Handle, out var previous))
         {
             if (!previous.IsDestroyed && previous.Target.Identity == identity)
@@ -64,11 +64,11 @@ internal sealed class CurtainManager : IDisposable
     {
         foreach (var session in _sessions.Values.ToArray()) session.RefreshSafely();
     }
-    internal void SetIdleForcedClosed(bool forced)
+    internal void SetIdleForcedClosed(bool forced, bool animate = false)
     {
         if (_disposed || _idleForcedClosed == forced) return;
         _idleForcedClosed = forced;
-        foreach (var session in _sessions.Values.ToArray()) session.SetIdleForcedClosed(forced);
+        foreach (var session in _sessions.Values.ToArray()) session.SetIdleForcedClosed(forced, animate);
     }
     internal void ReapplyIdleForcedClosed()
     {

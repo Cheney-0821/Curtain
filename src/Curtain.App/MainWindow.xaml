@@ -12,13 +12,13 @@
                 </StackPanel>
             </NavigationView.PaneHeader>
             <NavigationView.MenuItems>
-                <NavigationViewItem x:Name="HomeItem" Content="窗口保护" Tag="home">
+                <NavigationViewItem x:Name="HomeItem"  Tag="home">
                     <NavigationViewItem.Icon><FontIcon Glyph="&#xE7C3;" /></NavigationViewItem.Icon>
                 </NavigationViewItem>
-                <NavigationViewItem Content="设置" Tag="settings">
+                <NavigationViewItem x:Name="SettingsItem" Tag="settings">
                     <NavigationViewItem.Icon><FontIcon Glyph="&#xE713;" /></NavigationViewItem.Icon>
                 </NavigationViewItem>
-                <NavigationViewItem Content="关于" Tag="about">
+                <NavigationViewItem x:Name="AboutItem" Tag="about">
                     <NavigationViewItem.Icon><FontIcon Glyph="&#xE946;" /></NavigationViewItem.Icon>
                 </NavigationViewItem>
             </NavigationView.MenuItems>
@@ -28,36 +28,35 @@
                         <ScrollViewer>
                             <StackPanel Padding="30,26,30,36" Spacing="22">
                                 <StackPanel Spacing="5">
-                                    <TextBlock Text="窗口保护" FontSize="30" FontWeight="SemiBold" />
-                                    <TextBlock Text="选择窗口，为内容添加隐私保护。" Opacity="0.72" />
+                                    <TextBlock x:Name="HomeTitleText" FontSize="30" FontWeight="SemiBold" />
+                                    <TextBlock x:Name="HomeDescriptionText" Opacity="0.72" />
                                 </StackPanel>
                                 <Border CornerRadius="12" Padding="18" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                                     <StackPanel Spacing="12">
-                                        <TextBlock Text="添加窗口" FontSize="18" FontWeight="SemiBold" />
-                                        <TextBlock Text="选择你想要保护的隐私窗口。" TextWrapping="Wrap" Opacity="0.82" />
+                                        <TextBlock x:Name="AddWindowTitleText" FontSize="18" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="AddWindowDescriptionText" TextWrapping="Wrap" Opacity="0.82" />
                                         <StackPanel Orientation="Horizontal" Spacing="10">
-                                            <Button x:Name="PickButton" Content="添加窗口" Click="OnPickClick" />
-                                            <Button x:Name="ScreenPrivacyButton" Content="保护整个屏幕" Click="OnScreenPrivacyClick" />
+                                            <Button x:Name="PickButton" Click="OnPickClick" />
+                                            <Button x:Name="ScreenPrivacyButton" Click="OnScreenPrivacyClick" />
                                         </StackPanel>
-                                        <Button x:Name="ResumeAutoButton" Content="结束自动保护" Click="OnResumeAutoClick"
-                                                HorizontalAlignment="Left" Visibility="Collapsed" />
-                                        <TextBlock x:Name="CandidateText" Text="也可使用 Ctrl+Shift+F9 快速添加窗口。" TextWrapping="Wrap" Opacity="0.7" />
+                                        <Button x:Name="ResumeAutoButton" Click="OnResumeAutoClick" HorizontalAlignment="Left" Visibility="Collapsed" />
+                                        <TextBlock x:Name="CandidateText" TextWrapping="Wrap" Opacity="0.7" />
                                     </StackPanel>
                                 </Border>
                                 <StackPanel Spacing="12">
                                     <Grid ColumnSpacing="16">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                         <StackPanel Spacing="4">
-                                            <TextBlock x:Name="CountText" Text="已保护 0 个窗口" FontSize="20" FontWeight="SemiBold" />
+                                            <TextBlock x:Name="CountText" FontSize="20" FontWeight="SemiBold" />
                                         </StackPanel>
                                         <MenuBar Grid.Column="1" VerticalAlignment="Center">
-                                            <MenuBarItem Title="批量操作">
-                                                <MenuFlyoutItem x:Name="ProtectAllMenuItem" Text="全部启用保护" Click="OnProtectAll" />
-                                                <MenuFlyoutItem x:Name="PauseAllMenuItem" Text="全部暂停保护" Click="OnPauseAll" />
+                                            <MenuBarItem x:Name="BulkActionsItem">
+                                                <MenuFlyoutItem x:Name="ProtectAllMenuItem" Click="OnProtectAll" />
+                                                <MenuFlyoutItem x:Name="PauseAllMenuItem" Click="OnPauseAll" />
                                             </MenuBarItem>
                                         </MenuBar>
                                     </Grid>
-                                    <TextBlock x:Name="EmptyText" Text="还没有添加窗口。" Opacity="0.7" />
+                                    <TextBlock x:Name="EmptyText" Opacity="0.7" />
                                     <ListView x:Name="WindowList" SelectionMode="None" HorizontalContentAlignment="Stretch">
                                         <ListView.ItemTemplate>
                                             <DataTemplate>
@@ -69,14 +68,14 @@
                                                             <TextBlock Text="{Binding State}" Opacity="0.7" />
                                                         </StackPanel>
                                                         <Button Grid.Column="1" Content="{Binding ActionLabel}" Tag="{Binding}" Click="OnRowToggle" MinWidth="94" />
-                                                        <Button Grid.Column="2" Content="移除保护" Tag="{Binding}" Click="OnRowDetach" />
+                                                        <Button Grid.Column="2" Tag="{Binding}" Click="OnRowDetach" Loaded="OnRemoveButtonLoaded" />
                                                     </Grid>
                                                 </Border>
                                             </DataTemplate>
                                         </ListView.ItemTemplate>
                                     </ListView>
                                 </StackPanel>
-                                <TextBlock x:Name="StatusText" Text="就绪" TextWrapping="Wrap" Opacity="0.8" />
+                                <TextBlock x:Name="StatusText" TextWrapping="Wrap" Opacity="0.8" />
                             </StackPanel>
                         </ScrollViewer>
                     </Grid>
@@ -84,44 +83,46 @@
                         <ScrollViewer>
                             <StackPanel Padding="30,26,30,36" Spacing="20">
                                 <StackPanel Spacing="5">
-                                    <TextBlock Text="设置" FontSize="30" FontWeight="SemiBold" />
+                                    <TextBlock x:Name="SettingsTitleText" FontSize="30" FontWeight="SemiBold" />
                                 </StackPanel>
                                 <Border CornerRadius="12" Padding="18" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                                     <StackPanel Spacing="16">
-                                        <TextBlock Text="常规" FontSize="18" FontWeight="SemiBold" />
-                                        <TextBlock Text="关闭主窗口后，Curtain 仍会在系统托盘运行。" TextWrapping="Wrap" Opacity="0.75" />
-                                        <ToggleSwitch x:Name="StartupSwitch" Header="登录 Windows 后启动 Curtain" Toggled="OnStartupToggled" />
-                                        <ToggleSwitch x:Name="AutoUpdateSwitch" Header="自动检查并下载更新" Toggled="OnAutoUpdateToggled" />
+                                        <TextBlock x:Name="GeneralTitleText" FontSize="18" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="GeneralDescriptionText" TextWrapping="Wrap" Opacity="0.75" />
+                                        <ToggleSwitch x:Name="StartupSwitch" Toggled="OnStartupToggled" />
+                                        <ToggleSwitch x:Name="AutoUpdateSwitch" Toggled="OnAutoUpdateToggled" />
+                                        <ComboBox x:Name="LanguageCombo" SelectedValuePath="Tag" SelectionChanged="OnLanguageSelectionChanged">
+                                            <ComboBoxItem Tag="System"  />
+                                            <ComboBoxItem Tag="en-US"  />
+                                            <ComboBoxItem Tag="zh-CN"  />
+                                        </ComboBox>
                                     </StackPanel>
                                 </Border>
                                 <Border CornerRadius="12" Padding="18" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                                     <StackPanel Spacing="14">
-                                        <TextBlock Text="自动保护" FontSize="18" FontWeight="SemiBold" />
-                                        <TextBlock Text="离开电脑一段时间后，自动保护隐私内容。" Opacity="0.75" TextWrapping="Wrap" />
-                                        <ToggleSwitch x:Name="IdleProtectSwitch" Header="启用空闲自动保护" Toggled="OnAutoProtectionChanged" />
-                                        <ComboBox x:Name="IdleMinutesCombo" Header="无操作时长" SelectedValuePath="Tag" SelectionChanged="OnAutoProtectionScopeChanged">
-                                            <ComboBoxItem Tag="1" Content="1 分钟" />
-                                            <ComboBoxItem Tag="3" Content="3 分钟" />
-                                            <ComboBoxItem Tag="5" Content="5 分钟" />
-                                            <ComboBoxItem Tag="10" Content="10 分钟" />
+                                        <TextBlock x:Name="AutoProtectionTitleText" FontSize="18" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="AutoProtectionDescriptionText" Opacity="0.75" TextWrapping="Wrap" />
+                                        <ToggleSwitch x:Name="IdleProtectSwitch" Toggled="OnAutoProtectionChanged" />
+                                        <ComboBox x:Name="IdleMinutesCombo" SelectedValuePath="Tag" SelectionChanged="OnAutoProtectionScopeChanged">
+                                            <ComboBoxItem Tag="1"  />
+                                            <ComboBoxItem Tag="3"  />
+                                            <ComboBoxItem Tag="5"  />
+                                            <ComboBoxItem Tag="10"  />
                                         </ComboBox>
-                                        <TextBlock Text="自动保护范围" FontWeight="SemiBold" />
-                                        <RadioButtons x:Name="IdleScopeButtons" SelectedIndex="0" SelectionChanged="OnAutoProtectionScopeChanged">
-                                            <x:String>仅已添加的窗口</x:String>
-                                            <x:String>整个屏幕（所有显示器）</x:String>
-                                        </RadioButtons>
-                                        <TextBlock Text="Ctrl+Shift+F10：切换全屏保护 / 结束自动保护。" Opacity="0.68" TextWrapping="Wrap" />
+                                        <TextBlock x:Name="AutoProtectionScopeLabelText" FontWeight="SemiBold" />
+                                        <RadioButtons x:Name="IdleScopeButtons" SelectedIndex="0" SelectionChanged="OnAutoProtectionScopeChanged" />
+                                        <TextBlock x:Name="AutoProtectionHotkeyHintText" Opacity="0.68" TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
                                 <Border CornerRadius="12" Padding="18" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                                     <StackPanel Spacing="12">
-                                        <TextBlock Text="全局快捷键" FontSize="18" FontWeight="SemiBold" />
-                                        <ToggleSwitch x:Name="HotkeyEnabledSwitch" Header="启用全局添加窗口快捷键" Toggled="OnSettingChanged" />
+                                        <TextBlock x:Name="HotkeyTitleText" FontSize="18" FontWeight="SemiBold" />
+                                        <ToggleSwitch x:Name="HotkeyEnabledSwitch" Toggled="OnSettingChanged" />
                                         <StackPanel Orientation="Horizontal" Spacing="12">
                                             <CheckBox x:Name="ControlModifierCheck" Content="Ctrl" Checked="OnSettingChanged" Unchecked="OnSettingChanged" />
                                             <CheckBox x:Name="ShiftModifierCheck" Content="Shift" Checked="OnSettingChanged" Unchecked="OnSettingChanged" />
                                             <CheckBox x:Name="AltModifierCheck" Content="Alt" Checked="OnSettingChanged" Unchecked="OnSettingChanged" />
-                                            <ComboBox x:Name="HotkeyKeyCombo" Header="按键" SelectedValuePath="Tag" SelectionChanged="OnHotkeyKeyChanged">
+                                            <ComboBox x:Name="HotkeyKeyCombo" SelectedValuePath="Tag" SelectionChanged="OnHotkeyKeyChanged">
                                                 <ComboBoxItem Content="F1" Tag="112" /><ComboBoxItem Content="F2" Tag="113" />
                                                 <ComboBoxItem Content="F3" Tag="114" /><ComboBoxItem Content="F4" Tag="115" />
                                                 <ComboBoxItem Content="F5" Tag="116" /><ComboBoxItem Content="F6" Tag="117" />
@@ -140,21 +141,21 @@
                     <Grid x:Name="AboutPage" Visibility="Collapsed">
                         <ScrollViewer>
                             <StackPanel Padding="30,26,30,36" Spacing="18">
-                                <TextBlock Text="关于 Curtain" FontSize="30" FontWeight="SemiBold" />
+                                <TextBlock x:Name="AboutTitleText" FontSize="30" FontWeight="SemiBold" />
                                 <Border CornerRadius="12" Padding="20" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                                     <StackPanel Spacing="10">
                                         <TextBlock Text="Curtain" FontSize="24" FontWeight="SemiBold" />
-                                        <TextBlock x:Name="AppVersionText" Text="窗口隐私保护 · 加载中" Opacity="0.75" />
-                                        <TextBlock Text="为桌面应用窗口提供可随窗口移动和缩放的磨砂保护层。" TextWrapping="Wrap" />
+                                        <TextBlock x:Name="AppVersionText" Opacity="0.75" />
+                                        <TextBlock x:Name="AboutDescriptionText" TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
                                 <Border CornerRadius="12" Padding="20" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                                     <StackPanel Spacing="10">
-                                        <TextBlock Text="软件更新" FontSize="18" FontWeight="SemiBold" />
-                                        <TextBlock Text="可自动检查并下载更新，安装时间由你决定。" TextWrapping="Wrap" Opacity="0.75" />
-                                        <Button x:Name="UpdateActionButton" Content="检查更新" HorizontalAlignment="Left" Click="OnUpdateActionClick" />
+                                        <TextBlock x:Name="UpdatesTitleText" FontSize="18" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="UpdatesDescriptionText" TextWrapping="Wrap" Opacity="0.75" />
+                                        <Button x:Name="UpdateActionButton" HorizontalAlignment="Left" Click="OnUpdateActionClick" />
                                         <ProgressBar x:Name="UpdateProgress" Minimum="0" Maximum="100" Height="4" Visibility="Collapsed" />
-                                        <TextBlock x:Name="UpdateStatusText" Text="尚未检查更新。" TextWrapping="Wrap" Opacity="0.8" />
+                                        <TextBlock x:Name="UpdateStatusText" TextWrapping="Wrap" Opacity="0.8" />
                                     </StackPanel>
                                 </Border>
                             </StackPanel>

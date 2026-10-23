@@ -41,6 +41,31 @@ var downgrade = release with { AssetUrl = "http://updates.example.com/payload.ex
 Check(downgrade.Validate("updates.example.com").Count > 0, "non-HTTPS rejected");
 var badhash = release with { Sha256 = "bad" };
 Check(badhash.Validate("updates.example.com").Count > 0, "malformed hash rejected");
+// Pure curve checks cover pre-first-Tick reversals without claiming HWND/UI validation.
+Check(OverlayFadeCurve.DurationFor(0, 255) == 180.0 &&
+      OverlayFadeCurve.Sample(0, 255, 0, 180) == 0 &&
+      OverlayFadeCurve.Sample(0, 255, 180, 180) == 255,
+    "normal overlay fade keeps 180 ms endpoints");
+Check(OverlayFadeCurve.Sample(0, 255, 90, 180) == 127.5 &&
+      OverlayFadeCurve.Sample(255, 0, 90, 180) == 127.5,
+    "overlay fade midpoint and easing symmetry");
+Check(OverlayFadeCurve.NearlyTransparent(OverlayFadeCurve.Sample(0, 255, 4, 180)) &&
+      OverlayFadeCurve.NearlyTransparent(OverlayFadeCurve.Sample(0, 255, 10, 180)),
+    "closing before first Tick can hide an almost-invisible overlay immediately");
+Check(!OverlayFadeCurve.NearlyTransparent(OverlayFadeCurve.Sample(0, 255, 30, 180)) &&
+      OverlayFadeCurve.DurationFor(OverlayFadeCurve.Sample(0, 255, 30, 180), 0) < 30,
+    "pre-Tick late reversal samples elapsed time and shortens remaining fade");
+double halfFade = OverlayFadeCurve.Sample(0, 255, 90, 180);
+double reverseDuration = OverlayFadeCurve.DurationFor(halfFade, 0);
+Check(reverseDuration == 90 &&
+      OverlayFadeCurve.Sample(halfFade, 0, 0, reverseDuration) == halfFade &&
+      OverlayFadeCurve.Sample(halfFade, 0, reverseDuration, reverseDuration) == 0,
+    "halfway reversal is continuous and finishes over remaining distance");
+Check(OverlayFadeCurve.Sample(20, 0, 1000, OverlayFadeCurve.DurationFor(20, 0)) == 0 &&
+      OverlayFadeCurve.Sample(20, 255, -5, OverlayFadeCurve.DurationFor(20, 255)) == 20 &&
+      OverlayFadeCurve.Sample(0, 0, 0, 0) == 0,
+    "fade clamps late and early timestamps and handles zero distance");
+
 var clearAcrylic = AcrylicToneProfile.FromStrength(45);
 var strongerAcrylic = AcrylicToneProfile.FromStrength(88);
 var strongestAcrylic = AcrylicToneProfile.FromStrength(98);
@@ -174,6 +199,12 @@ try
     Check(!defaults.RecoveredFromInvalidFile && !defaults.Settings.StartWithWindows && defaults.Settings.Hotkey.Enabled &&
           defaults.Settings.Hotkey.VirtualKey == 0x78 && defaults.Settings.AutoDownloadUpdates,
         "first-run preferences default to disabled startup, Ctrl+Shift+F9, and automatic update downloads");
+    Check(defaults.Settings.BlurPreset == OverlayBlurPreset.Standard && defaults.Settings.Language == AppLanguage.System,
+        "blur and language preferences default to Standard and System");
+    Check(OverlayBlurPreset.Amount(OverlayBlurPreset.Light) == 2.0f &&
+          OverlayBlurPreset.Amount(OverlayBlurPreset.Standard) == 5.0f &&
+          OverlayBlurPreset.Amount(OverlayBlurPreset.Strong) == 9.0f,
+        "blur presets map to the required Gaussian amounts");
     Check(CurtainUserSettingsStore.IsValidHotkey(defaults.Settings.Hotkey), "default global hotkey is valid");
     Check(!CurtainUserSettingsStore.IsValidHotkey(new GlobalHotkeySettings(true, 0, 0x78)),
         "global hotkey requires a modifier and a supported key");
@@ -183,13 +214,16 @@ try
     {
         StartWithWindows = true,
         AutoDownloadUpdates = false,
+        BlurPreset = OverlayBlurPreset.Strong,
+        Language = AppLanguage.English,
         Hotkey = new GlobalHotkeySettings(true, HotkeyModifier.Control | HotkeyModifier.Shift, 0x77)
     };
     settingsStore.Save(settings);
     var saved = settingsStore.Load();
     string json = File.ReadAllText(Path.Combine(settingsDirectory, "settings.json"));
-    Check(saved.Settings.StartWithWindows && !saved.Settings.AutoDownloadUpdates && saved.Settings.Hotkey.VirtualKey == 0x77,
-        "user preferences, including the automatic update toggle, survive reload");
+    Check(saved.Settings.StartWithWindows && !saved.Settings.AutoDownloadUpdates && saved.Settings.Hotkey.VirtualKey == 0x77 &&
+          saved.Settings.BlurPreset == OverlayBlurPreset.Strong && saved.Settings.Language == AppLanguage.English,
+        "user preferences, including blur and language, survive reload");
     Check(!json.Contains("Private Canary Chat Title", StringComparison.Ordinal) &&
           !json.Contains("WindowHandle", StringComparison.OrdinalIgnoreCase) &&
           !json.Contains("ProcessId", StringComparison.OrdinalIgnoreCase) &&
@@ -200,8 +234,17 @@ try
     File.WriteAllText(Path.Combine(settingsDirectory, "settings.json"),
         "{\"SchemaVersion\":1,\"StartWithWindows\":false,\"Hotkey\":{\"Enabled\":true,\"Modifiers\":6,\"VirtualKey\":120}}");
     var legacySettings = settingsStore.Load();
-    Check(!legacySettings.RecoveredFromInvalidFile && legacySettings.Settings.AutoDownloadUpdates,
-        "legacy settings without the update preference default to enabled");
+    Check(!legacySettings.RecoveredFromInvalidFile && legacySettings.Settings.AutoDownloadUpdates &&
+          legacySettings.Settings.BlurPreset == OverlayBlurPreset.Standard && legacySettings.Settings.Language == AppLanguage.System,
+        "legacy settings without new preferences retain compatible defaults");
+    File.WriteAllText(Path.Combine(settingsDirectory, "settings.json"),
+        "{\"SchemaVersion\":1,\"StartWithWindows\":true,\"AutoDownloadUpdates\":false,\"Hotkey\":{\"Enabled\":true,\"Modifiers\":6,\"VirtualKey\":120},\"AutoProtection\":{\"Enabled\":true,\"IdleMinutes\":5,\"Scope\":1},\"BlurPreset\":\"Ultra\",\"Language\":\"fr-FR\"}");
+    var normalizedSettings = settingsStore.Load();
+    Check(!normalizedSettings.RecoveredFromInvalidFile && normalizedSettings.Settings.StartWithWindows &&
+          !normalizedSettings.Settings.AutoDownloadUpdates && normalizedSettings.Settings.AutoProtection.Enabled &&
+          normalizedSettings.Settings.AutoProtection.Scope == AutoProtectionScope.AllDisplays &&
+          normalizedSettings.Settings.BlurPreset == OverlayBlurPreset.Standard && normalizedSettings.Settings.Language == AppLanguage.System,
+        "invalid blur or language preferences normalize without resetting other settings");
     File.WriteAllText(Path.Combine(settingsDirectory, "settings.json"), "{ invalid json");
     var recovered = settingsStore.Load();
     Check(recovered.RecoveredFromInvalidFile && !recovered.Settings.StartWithWindows,

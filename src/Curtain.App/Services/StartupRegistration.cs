@@ -12,7 +12,7 @@ internal static class StartupRegistration
         try
         {
             using var key = Registry.CurrentUser.CreateSubKey(RunKey, writable: true);
-            if (key is null) return "无法访问当前用户的开机启动设置。";
+            if (key is null) return "StartupRunKeyUnavailable";
             if (!enabled)
             {
                 key.DeleteValue(ValueName, throwOnMissingValue: false);
@@ -20,15 +20,15 @@ internal static class StartupRegistration
             }
 
             string? executable = GetStableLaunchPath();
-            if (string.IsNullOrWhiteSpace(executable)) return "无法确定 Curtain 当前运行路径。";
+            if (string.IsNullOrWhiteSpace(executable)) return "StartupPathUnavailable";
             string command = $"\"{executable}\" --background";
-            if (command.Length > 260) return "当前程序路径过长，无法安全写入开机启动项。";
+            if (command.Length > 260) return "StartupPathTooLong";
             key.SetValue(ValueName, command, RegistryValueKind.String);
             return null;
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or System.Security.SecurityException)
         {
-            return $"更新开机启动项失败：{ex.Message}";
+            return "StartupUpdateFailed";
         }
     }
 

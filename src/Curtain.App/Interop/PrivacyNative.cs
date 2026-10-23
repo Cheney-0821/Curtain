@@ -61,10 +61,12 @@ internal static class PrivacyNative
         return found;
     }
 
-    internal static void PositionFullScreen(nint hwnd, ScreenRect area)
+    internal static void PositionFullScreen(nint hwnd, ScreenRect area, bool showWindow = true)
     {
+        uint flags = SwpNoActivate;
+        if (showWindow) flags |= SwpShowWindow;
         if (!NativeMethods.SetWindowPos(hwnd, (nint)HwndTopmost, area.Left, area.Top,
-                area.Width, area.Height, SwpNoActivate | SwpShowWindow))
+                area.Width, area.Height, flags))
             throw new Win32Exception(Marshal.GetLastPInvokeError(), "无法将隐私遮罩覆盖屏幕。");
     }
 }

@@ -1,0 +1,393 @@
+<?xml version='1.0' encoding='utf-8'?>
+<root>
+  <data name="WindowTitle" xml:space="preserve">
+    <value>Curtain · Window Privacy</value>
+  </data>
+  <data name="AppVersion" xml:space="preserve">
+    <value>Window privacy protection · {0}</value>
+  </data>
+  <data name="NavigationHome" xml:space="preserve">
+    <value>Windows</value>
+  </data>
+  <data name="NavigationSettings" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="NavigationAbout" xml:space="preserve">
+    <value>About</value>
+  </data>
+  <data name="HomeTitle" xml:space="preserve">
+    <value>Window protection</value>
+  </data>
+  <data name="HomeDescription" xml:space="preserve">
+    <value>Choose windows to protect their contents.</value>
+  </data>
+  <data name="AddWindowTitle" xml:space="preserve">
+    <value>Add a window</value>
+  </data>
+  <data name="AddWindowDescription" xml:space="preserve">
+    <value>Choose a private window to protect.</value>
+  </data>
+  <data name="AddWindowButton" xml:space="preserve">
+    <value>Add window</value>
+  </data>
+  <data name="ProtectScreenButton" xml:space="preserve">
+    <value>Protect entire screen</value>
+  </data>
+  <data name="RestoreScreenButton" xml:space="preserve">
+    <value>Restore screen</value>
+  </data>
+  <data name="EndAutoProtectionButton" xml:space="preserve">
+    <value>End automatic protection</value>
+  </data>
+  <data name="PickerHelp" xml:space="preserve">
+    <value>The window is ready to select.</value>
+  </data>
+  <data name="PickerInProgress" xml:space="preserve">
+    <value>Adding window…</value>
+  </data>
+  <data name="BulkActions" xml:space="preserve">
+    <value>Bulk actions</value>
+  </data>
+  <data name="ProtectAll" xml:space="preserve">
+    <value>Protect all</value>
+  </data>
+  <data name="PauseAll" xml:space="preserve">
+    <value>Pause all</value>
+  </data>
+  <data name="EmptyWindows" xml:space="preserve">
+    <value>No windows have been added.</value>
+  </data>
+  <data name="RemoveProtection" xml:space="preserve">
+    <value>Remove protection</value>
+  </data>
+  <data name="Ready" xml:space="preserve">
+    <value>Ready.</value>
+  </data>
+  <data name="WindowCount" xml:space="preserve">
+    <value>Added {0} windows</value>
+  </data>
+  <data name="WindowAdded" xml:space="preserve">
+    <value>Window added.</value>
+  </data>
+  <data name="WindowNotAdded" xml:space="preserve">
+    <value>The window could not be added.</value>
+  </data>
+  <data name="WindowRemoved" xml:space="preserve">
+    <value>Protection removed from this window.</value>
+  </data>
+  <data name="UnableStartPicker" xml:space="preserve">
+    <value>Could not start window selection.</value>
+  </data>
+  <data name="SelectAppBeforeHotkey" xml:space="preserve">
+    <value>Switch to the app you want to protect, then press the shortcut.</value>
+  </data>
+  <data name="SettingsTitle" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="GeneralTitle" xml:space="preserve">
+    <value>General</value>
+  </data>
+  <data name="GeneralDescription" xml:space="preserve">
+    <value>Choose how Curtain starts and which language it uses.</value>
+  </data>
+  <data name="StartupHeader" xml:space="preserve">
+    <value>Start Curtain when I sign in</value>
+  </data>
+  <data name="ToggleOn" xml:space="preserve">
+    <value>On</value>
+  </data>
+  <data name="ToggleOff" xml:space="preserve">
+    <value>Off</value>
+  </data>
+  <data name="AutoUpdateHeader" xml:space="preserve">
+    <value>Automatically check for and download updates</value>
+  </data>
+  <data name="LanguageHeader" xml:space="preserve">
+    <value>App language</value>
+  </data>
+  <data name="LanguageSystem" xml:space="preserve">
+    <value>System default</value>
+  </data>
+  <data name="LanguageEnglish" xml:space="preserve">
+    <value>English</value>
+  </data>
+  <data name="LanguageChinese" xml:space="preserve">
+    <value>简体中文</value>
+  </data>
+  <data name="AutoProtectionTitle" xml:space="preserve">
+    <value>Automatic protection</value>
+  </data>
+  <data name="AutoProtectionDescription" xml:space="preserve">
+    <value>Protect privacy after you step away from your computer.</value>
+  </data>
+  <data name="EnableIdleProtection" xml:space="preserve">
+    <value>Enable idle protection</value>
+  </data>
+  <data name="IdleDurationHeader" xml:space="preserve">
+    <value>Idle time</value>
+  </data>
+  <data name="IdleMinute1" xml:space="preserve">
+    <value>1 minute</value>
+  </data>
+  <data name="IdleMinute3" xml:space="preserve">
+    <value>3 minutes</value>
+  </data>
+  <data name="IdleMinute5" xml:space="preserve">
+    <value>5 minutes</value>
+  </data>
+  <data name="IdleMinute10" xml:space="preserve">
+    <value>10 minutes</value>
+  </data>
+  <data name="AutoProtectionScopeLabel" xml:space="preserve">
+    <value>Automatic protection scope</value>
+  </data>
+  <data name="ScopeAddedWindows" xml:space="preserve">
+    <value>Added windows only</value>
+  </data>
+  <data name="ScopeAllDisplays" xml:space="preserve">
+    <value>Entire desktop (all displays)</value>
+  </data>
+  <data name="AutoProtectionHotkeyHint" xml:space="preserve">
+    <value>Ctrl+Shift+F10: toggle full-screen protection or end automatic protection.</value>
+  </data>
+  <data name="HotkeyTitle" xml:space="preserve">
+    <value>Keyboard shortcut</value>
+  </data>
+  <data name="EnableHotkeyHeader" xml:space="preserve">
+    <value>Enable window-selection shortcut</value>
+  </data>
+  <data name="HotkeyKeyHeader" xml:space="preserve">
+    <value>Key</value>
+  </data>
+  <data name="HotkeyInvalid" xml:space="preserve">
+    <value>Choose F1–F11 and keep at least one modifier to enable the shortcut.</value>
+  </data>
+  <data name="HotkeyDisabled" xml:space="preserve">
+    <value>Shortcut is disabled.</value>
+  </data>
+  <data name="HotkeyCurrent" xml:space="preserve">
+    <value>Current shortcut: {0}</value>
+  </data>
+  <data name="HotkeyAlreadyRegistered" xml:space="preserve">
+    <value>{0} is already in use by another app. Choose a different shortcut or turn it off.</value>
+  </data>
+  <data name="HotkeyRegistrationFailed" xml:space="preserve">
+    <value>Could not register {0} (error {1}). Choose a different shortcut or turn it off.</value>
+  </data>
+  <data name="PrivacyHotkeyUnavailable" xml:space="preserve">
+    <value>Ctrl+Shift+F10 is already in use. You can protect the entire screen from Home.</value>
+  </data>
+  <data name="AboutTitle" xml:space="preserve">
+    <value>About Curtain</value>
+  </data>
+  <data name="AboutDescription" xml:space="preserve">
+    <value>A frosted-glass privacy shield for desktop windows that provides quick protection while you move and resize them.</value>
+  </data>
+  <data name="UpdatesTitle" xml:space="preserve">
+    <value>Software updates</value>
+  </data>
+  <data name="UpdatesDescription" xml:space="preserve">
+    <value>Curtain can check for and download updates automatically. You choose when to install.</value>
+  </data>
+  <data name="CheckUpdates" xml:space="preserve">
+    <value>Check for updates</value>
+  </data>
+  <data name="InstallUpdate" xml:space="preserve">
+    <value>Install update</value>
+  </data>
+  <data name="UpdateNotChecked" xml:space="preserve">
+    <value>Updates have not been checked yet.</value>
+  </data>
+  <data name="UpdateChecking" xml:space="preserve">
+    <value>Checking for updates…</value>
+  </data>
+  <data name="UpdateDownloading" xml:space="preserve">
+    <value>A new version was found. Downloading…</value>
+  </data>
+  <data name="DownloadingPercent" xml:space="preserve">
+    <value>Downloading update… {0}%</value>
+  </data>
+  <data name="UpdateReady" xml:space="preserve">
+    <value>Version {0} has been downloaded and is ready to install.</value>
+  </data>
+  <data name="UpdateBusy" xml:space="preserve">
+    <value>An update check or download is already running. Please wait.</value>
+  </data>
+  <data name="UpdateNotInstalled" xml:space="preserve">
+    <value>Install Curtain before checking for updates.</value>
+  </data>
+  <data name="UpdateLatest" xml:space="preserve">
+    <value>Curtain is up to date.</value>
+  </data>
+  <data name="UpdateCheckFailed" xml:space="preserve">
+    <value>Update check failed.</value>
+  </data>
+  <data name="UpdateMissing" xml:space="preserve">
+    <value>The downloaded update is missing. Check for updates again.</value>
+  </data>
+  <data name="UpdateInvalid" xml:space="preserve">
+    <value>The update file is no longer valid. Check for updates again.</value>
+  </data>
+  <data name="UpdateInstallFailed" xml:space="preserve">
+    <value>Could not start the update installation.</value>
+  </data>
+  <data name="InstallUpdateTitle" xml:space="preserve">
+    <value>Install Curtain {0}</value>
+  </data>
+  <data name="InstallUpdateConfirm" xml:space="preserve">
+    <value>Installing the update will restart Curtain and temporarily close active privacy overlays. Install now?</value>
+  </data>
+  <data name="InstallAndRestart" xml:space="preserve">
+    <value>Install and restart</value>
+  </data>
+  <data name="Later" xml:space="preserve">
+    <value>Later</value>
+  </data>
+  <data name="SettingsReadFailed" xml:space="preserve">
+    <value>Settings could not be read. Safe defaults have been loaded.</value>
+  </data>
+  <data name="SettingsSaveFailed" xml:space="preserve">
+    <value>Settings could not be saved.</value>
+  </data>
+  <data name="StartupRunKeyUnavailable" xml:space="preserve">
+    <value>Could not access the current-user startup settings.</value>
+  </data>
+  <data name="StartupPathUnavailable" xml:space="preserve">
+    <value>The Curtain startup path is unavailable.</value>
+  </data>
+  <data name="StartupPathTooLong" xml:space="preserve">
+    <value>The Curtain startup command is too long.</value>
+  </data>
+  <data name="StartupUpdateFailed" xml:space="preserve">
+    <value>Could not update the startup setting.</value>
+  </data>
+  <data name="StartupRollbackFailure" xml:space="preserve">
+    <value>The startup change could not be rolled back.</value>
+  </data>
+  <data name="StartupEnabled" xml:space="preserve">
+    <value>Start Curtain when I sign in is enabled.</value>
+  </data>
+  <data name="StartupDisabled" xml:space="preserve">
+    <value>Start Curtain when I sign in is disabled.</value>
+  </data>
+  <data name="UnableEnableScreen" xml:space="preserve">
+    <value>Could not enable full-screen protection.</value>
+  </data>
+  <data name="AutoProtectionStartFailed" xml:space="preserve">
+    <value>Automatic protection could not start.</value>
+  </data>
+  <data name="FullScreenResumeFailed" xml:space="preserve">
+    <value>Full-screen protection could not be restored.</value>
+  </data>
+  <data name="HiddenToTray" xml:space="preserve">
+    <value>Curtain is hidden in the system tray. Protection will continue running.</value>
+  </data>
+  <data name="OverlayErrorWindowRemoved" xml:space="preserve">
+    <value>Protection ended because the overlay encountered an error.</value>
+  </data>
+  <data name="TargetClosedWindowRemoved" xml:space="preserve">
+    <value>Protection ended because the target window closed.</value>
+  </data>
+  <data name="TargetWindowNotForeground" xml:space="preserve">
+    <value>Bring the target window to the foreground to protect it.</value>
+  </data>
+  <data name="PointerCaptureFailed" xml:space="preserve">
+    <value>The overlay could not capture pointer input.</value>
+  </data>
+  <data name="MoveNotSupported" xml:space="preserve">
+    <value>This window cannot be moved by dragging the overlay.</value>
+  </data>
+  <data name="MoveFailed" xml:space="preserve">
+    <value>The window could not be moved.</value>
+  </data>
+  <data name="WindowUnavailable" xml:space="preserve">
+    <value>Unavailable</value>
+  </data>
+  <data name="Protected" xml:space="preserve">
+    <value>Protected</value>
+  </data>
+  <data name="Paused" xml:space="preserve">
+    <value>Paused</value>
+  </data>
+  <data name="PauseProtection" xml:space="preserve">
+    <value>Pause protection</value>
+  </data>
+  <data name="EnableProtection" xml:space="preserve">
+    <value>Resume protection</value>
+  </data>
+  <data name="TrayTooltip" xml:space="preserve">
+    <value>Curtain privacy protection</value>
+  </data>
+  <data name="TrayOpen" xml:space="preserve">
+    <value>Open Curtain</value>
+  </data>
+  <data name="TrayPauseAll" xml:space="preserve">
+    <value>Pause all protection</value>
+  </data>
+  <data name="TrayProtectAll" xml:space="preserve">
+    <value>Protect all windows</value>
+  </data>
+  <data name="TrayExit" xml:space="preserve">
+    <value>Exit Curtain</value>
+  </data>
+  <data name="TrayIconCreationFailed" xml:space="preserve">
+    <value>Could not create the Curtain tray icon.</value>
+  </data>
+  <data name="ScreenPrivacyTitle" xml:space="preserve">
+    <value>Curtain · Full-screen privacy protection</value>
+  </data>
+  <data name="ResumeUse" xml:space="preserve">
+    <value>Restore</value>
+  </data>
+  <data name="PickerNoForeground" xml:space="preserve">
+    <value>Switch to the window you want to protect first.</value>
+  </data>
+  <data name="PickerCancelled" xml:space="preserve">
+    <value>Window selection was cancelled.</value>
+  </data>
+  <data name="PickerConfirmationFailed" xml:space="preserve">
+    <value>The selected window could not be confirmed.</value>
+  </data>
+  <data name="PickerPromptF8" xml:space="preserve">
+    <value>Press F8 to cancel.</value>
+  </data>
+  <data name="PickerPromptClick" xml:space="preserve">
+    <value>Click a window to add it. Right-click to cancel.</value>
+  </data>
+  <data name="PickerFailedStart" xml:space="preserve">
+    <value>Window selection could not start.</value>
+  </data>
+  <data name="PickerEnded" xml:space="preserve">
+    <value>Window selection ended.</value>
+  </data>
+  <data name="PickerFailedSafely" xml:space="preserve">
+    <value>Window selection stopped safely after an error.</value>
+  </data>
+  <data name="PickerMoveF8" xml:space="preserve">
+    <value>Move the pointer over a window to preview it. Press F8 to cancel.</value>
+  </data>
+  <data name="PickerMoveClick" xml:space="preserve">
+    <value>Move the pointer over a window to preview it. Right-click to cancel.</value>
+  </data>
+  <data name="PickerTargetF8" xml:space="preserve">
+    <value>{0} — click to protect. Press F8 to cancel.</value>
+  </data>
+  <data name="PickerTargetClick" xml:space="preserve">
+    <value>{0} — click to protect. Right-click to cancel.</value>
+  </data>
+  <data name="PickerConfirmed" xml:space="preserve">
+    <value>Window selected.</value>
+  </data>
+  <data name="PickerSelectionEnded" xml:space="preserve">
+    <value>Window selection ended.</value>
+  </data>
+  <data name="WindowNotSelectable" xml:space="preserve">
+    <value>This window cannot be protected.</value>
+  </data>
+  <data name="DevelopmentBuild" xml:space="preserve">
+    <value>Development build</value>
+  </data>
+  <data name="WindowHandleFallback" xml:space="preserve">
+    <value>Window 0x{0}</value>
+  </data>
+</root>

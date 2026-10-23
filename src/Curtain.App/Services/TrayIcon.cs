@@ -1,12 +1,13 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using Curtain.App.Interop;
+using Curtain.App.Localization;
 
 namespace Curtain.App.Services;
 
 internal sealed class TrayIcon : IDisposable
 {
-    private const uint NimAdd = 0, NimDelete = 2;
+    private const uint NimAdd = 0, NimModify = 1, NimDelete = 2;
     private const uint NifMessage = 1, NifIcon = 2, NifTip = 4;
     private const uint WmNull = 0, WmLButtonUp = 0x0202, WmRButtonUp = 0x0205;
     private const uint WmAppTray = NativeMethods.WM_APP + 0x51;
@@ -31,7 +32,7 @@ internal sealed class TrayIcon : IDisposable
         if (File.Exists(iconPath))
             _loadedIcon = LoadImageW(nint.Zero, iconPath, 1, 0, 0, 0x10 | 0x40); // IMAGE_ICON, LR_LOADFROMFILE|LR_DEFAULTSIZE
         _taskbarCreated = NativeMethods.RegisterWindowMessageW("TaskbarCreated");
-        if (!AddIcon()) throw new Win32Exception(Marshal.GetLastPInvokeError(), "无法在系统托盘创建 Curtain 图标。");
+        if (!AddIcon()) throw new Win32Exception(Marshal.GetLastPInvokeError(), LocalizationService.Get("TrayIconCreationFailed"));
     }
 
     internal bool HandleMessage(uint message, nint wParam, nint lParam)
@@ -64,7 +65,7 @@ internal sealed class TrayIcon : IDisposable
         uFlags = NifMessage | NifIcon | NifTip,
         uCallbackMessage = WmAppTray,
         hIcon = _loadedIcon != 0 ? _loadedIcon : LoadIconW(0, (nint)32512),
-        szTip = "Curtain 窗口隐私保护",
+        szTip = LocalizationService.Get("TrayTooltip"),
         szInfo = string.Empty,
         szInfoTitle = string.Empty
     };
@@ -75,11 +76,11 @@ internal sealed class TrayIcon : IDisposable
         if (menu == 0) return;
         try
         {
-            AppendMenuW(menu, MfString, CommandOpen, "打开 Curtain");
+            AppendMenuW(menu, MfString, CommandOpen, LocalizationService.Get("TrayOpen"));
             AppendMenuW(menu, MfString, CommandToggleProtection,
-                AllProtectionEnabled?.Invoke() == true ? "全部暂停保护" : "全部启用保护");
+                LocalizationService.Get(AllProtectionEnabled?.Invoke() == true ? "TrayPauseAll" : "TrayProtectAll"));
             AppendMenuW(menu, 0x0800, 0, null);
-            AppendMenuW(menu, MfString, CommandExit, "退出 Curtain");
+            AppendMenuW(menu, MfString, CommandExit, LocalizationService.Get("TrayExit"));
             NativeMethods.SetForegroundWindow(_owner);
             if (!NativeMethods.GetCursorPos(out var point)) return;
             uint command = TrackPopupMenu(menu, TpmRightButton | TpmReturnCommand | TpmNonotify,
@@ -103,6 +104,13 @@ internal sealed class TrayIcon : IDisposable
         Shell_NotifyIconW(NimDelete, ref data);
         if (_loadedIcon != 0) DestroyIcon(_loadedIcon);
         OpenRequested = null; ToggleProtectionRequested = null; ExitRequested = null;
+    }
+
+    internal void RefreshLocalization()
+    {
+        var data = CreateData();
+        data.uFlags = NifTip;
+        Shell_NotifyIconW(NimModify, ref data);
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]

@@ -31,3 +31,21 @@ Thumbs.db
 /file-tree.txt
 /git-status.txt
 /sha256sums.txt
+
+# Single public main: keep private/local maintenance materials outside Git history.
+/development-log/
+/docs/internal/
+/OPEN_SOURCE_AUDIT.md
+/START-HERE-FOR-CODEX.md
+/scripts/B3-R2-Upload.ps1
+# Legacy local materials retained outside the public source tree.
+/docs/0[1-9]-*.md
+/docs/10-REPORT-TEMPLATE.md
+/docs/A0.2-INTEGRATION-REVIEW.md
+/docs/BETA-TESTING.md
+/docs/G3-B-RESULT.md
+/docs/SOURCE-RELEASE-MAPPING.md
+/docs/research/
+/docs/reviews/
+/docs/tasks/
+/release/latest.example.json

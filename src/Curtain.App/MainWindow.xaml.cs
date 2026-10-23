@@ -1,4 +1,5 @@
 using Curtain.App.Interop;
+using Curtain.App.Localization;
 using Curtain.App.Services;
 using Curtain.Core.Settings;
 using Microsoft.UI.Dispatching;
@@ -38,10 +39,14 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        Title = "Curtain · 窗口隐私保护";
+        var loaded = _settingsStore.Load();
+        _settings = loaded.Settings;
+        LocalizationService.SetLanguage(_settings.Language);
+        InitializeLocalizedControls();
+        UpdateWindowTitle();
         string iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Curtain.ico");
         if (File.Exists(iconPath)) AppWindow.SetIcon(iconPath);
-        AppVersionText.Text = "窗口隐私保护 · " + _updateService.InstalledVersion;
+        UpdateAppVersion();
         SystemBackdrop = new MicaBackdrop();
         AppWindow.Resize(new global::Windows.Graphics.SizeInt32(860, 760));
 
@@ -50,8 +55,6 @@ public sealed partial class MainWindow : Window
         _autoUpdateTimer.IsRepeating = false;
         _autoUpdateTimer.Tick += OnAutoUpdateTimer;
 
-        var loaded = _settingsStore.Load();
-        _settings = loaded.Settings;
         _manager = new(DispatcherQueue);
         _screenPrivacy = new();
         _screenPrivacy.ResumeRequested += OnResumeScreenRequested;
@@ -61,7 +64,7 @@ public sealed partial class MainWindow : Window
 
         nint handle = WindowNative.GetWindowHandle(this);
         _picker = new(_manager, DispatcherQueue, handle);
-        _picker.PreviewChanged += text => CandidateText.Text = text;
+        _picker.PreviewChanged += OnPickerPreviewChanged;
         _picker.Finished += OnPickFinished;
 
         _messageHost = new(handle);
@@ -78,22 +81,26 @@ public sealed partial class MainWindow : Window
         _tray.OpenRequested += ShowFromTray;
         _tray.ToggleProtectionRequested += ToggleAllProtection;
         _tray.ExitRequested += ExitCurtain;
+        LocalizationService.LanguageChanged += OnLanguageChanged;
 
         AppWindow.Closing += OnWindowClosing;
         Closed += OnWindowClosed;
 
+        UpdateLocalizedScopeItems();
         ApplySettingsToControls();
+        Localized.RefreshAll();
+        RefreshLocalizedOptionControls();
         _loadingSettings = false;
         ApplyHotkey();
         // Upgrade from a development path to Velopack's stable launcher on first installed start.
         if (_settings.StartWithWindows)
         {
             string? startupError = StartupRegistration.SetEnabled(true);
-            if (startupError is not null) SettingsStatusText.Text = startupError;
+            if (startupError is not null) Localized.SetText(SettingsStatusText, startupError);
         }
         if (loaded.RecoveredFromInvalidFile)
         {
-            SettingsStatusText.Text = "设置文件无法读取，已使用安全的默认设置。";
+            Localized.SetText(SettingsStatusText, "SettingsReadFailed");
             SaveSettings();
         }
         Navigation.SelectedItem = HomeItem;
@@ -104,11 +111,11 @@ public sealed partial class MainWindow : Window
         StartAutomaticUpdateTimer(initial: true);
         _idleMonitor = new(DispatcherQueue, () => _settings.AutoProtection,
             () => _idleScope.HasValue, ActivateIdleProtection,
-            () => { if (_screenPrivacy.IsActive) _screenPrivacy.RefreshDisplays(); },
+            () => { if (_screenPrivacy.HasOverlays) _screenPrivacy.RefreshDisplays(); },
             () => { if (_idleScope == AutoProtectionScope.AddedWindows)
                 _manager.ReapplyIdleForcedClosed(); });
         if (!_privacyHotkeyRegistered)
-            SettingsStatusText.Text = "Ctrl+Shift+F10 已被占用，可在首页操作全屏保护。";
+            Localized.SetText(SettingsStatusText, "PrivacyHotkeyUnavailable");
     }
 
     internal void StartHidden() => AppWindow.Hide();
@@ -142,6 +149,137 @@ public sealed partial class MainWindow : Window
         AboutPage.Visibility = section == "about" ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    private void OnLanguageChanged()
+    {
+        if (_disposed) return;
+        Localized.RefreshAll();
+        RefreshLocalizedOptionControls();
+        UpdateWindowTitle();
+        UpdateAppVersion();
+        UpdateLocalizedScopeItems();
+        _tray.RefreshLocalization();
+        _screenPrivacy.RefreshLocalization();
+        UpdateScreenButtons();
+        UpdateSummary();
+        UpdateHotkeyStatus();
+    }
+
+    private void InitializeLocalizedControls()
+    {
+        Localized.SetContent(HomeItem, "NavigationHome");
+        Localized.SetContent(SettingsItem, "NavigationSettings");
+        Localized.SetContent(AboutItem, "NavigationAbout");
+        Localized.SetText(HomeTitleText, "HomeTitle");
+        Localized.SetText(HomeDescriptionText, "HomeDescription");
+        Localized.SetText(AddWindowTitleText, "AddWindowTitle");
+        Localized.SetText(AddWindowDescriptionText, "AddWindowDescription");
+        Localized.SetContent(PickButton, "AddWindowButton");
+        Localized.SetAutomationName(PickButton, "AddWindowButton");
+        Localized.SetContent(ScreenPrivacyButton, "ProtectScreenButton");
+        Localized.SetAutomationName(ScreenPrivacyButton, "ProtectScreenButton");
+        Localized.SetContent(ResumeAutoButton, "EndAutoProtectionButton");
+        Localized.SetText(CandidateText, "PickerHelp");
+        Localized.SetTitle(BulkActionsItem, "BulkActions");
+        Localized.SetContent(ProtectAllMenuItem, "ProtectAll");
+        Localized.SetContent(PauseAllMenuItem, "PauseAll");
+        Localized.SetText(EmptyText, "EmptyWindows");
+        Localized.SetText(StatusText, "Ready");
+        Localized.SetText(SettingsTitleText, "SettingsTitle");
+        Localized.SetText(GeneralTitleText, "GeneralTitle");
+        Localized.SetText(GeneralDescriptionText, "GeneralDescription");
+        Localized.SetHeader(StartupSwitch, "StartupHeader");
+        Localized.SetHeader(AutoUpdateSwitch, "AutoUpdateHeader");
+        Localized.SetHeader(LanguageCombo, "LanguageHeader");
+        SetComboItemContent(LanguageCombo, "LanguageSystem", "LanguageEnglish", "LanguageChinese");
+        Localized.SetText(AutoProtectionTitleText, "AutoProtectionTitle");
+        Localized.SetText(AutoProtectionDescriptionText, "AutoProtectionDescription");
+        Localized.SetHeader(IdleProtectSwitch, "EnableIdleProtection");
+        Localized.SetHeader(IdleMinutesCombo, "IdleDurationHeader");
+        SetComboItemContent(IdleMinutesCombo, "IdleMinute1", "IdleMinute3", "IdleMinute5", "IdleMinute10");
+        Localized.SetText(AutoProtectionScopeLabelText, "AutoProtectionScopeLabel");
+        Localized.SetText(AutoProtectionHotkeyHintText, "AutoProtectionHotkeyHint");
+        Localized.SetText(HotkeyTitleText, "HotkeyTitle");
+        Localized.SetHeader(HotkeyEnabledSwitch, "EnableHotkeyHeader");
+        Localized.SetHeader(HotkeyKeyCombo, "HotkeyKeyHeader");
+        Localized.SetText(AboutTitleText, "AboutTitle");
+        Localized.SetText(AboutDescriptionText, "AboutDescription");
+        Localized.SetText(UpdatesTitleText, "UpdatesTitle");
+        Localized.SetText(UpdatesDescriptionText, "UpdatesDescription");
+        Localized.SetContent(UpdateActionButton, "CheckUpdates");
+        Localized.SetText(UpdateStatusText, "UpdateNotChecked");
+    }
+
+    private static void SetComboItemContent(ComboBox comboBox, params string[] keys)
+    {
+        var items = comboBox.Items.OfType<ComboBoxItem>().ToArray();
+        for (int index = 0; index < Math.Min(items.Length, keys.Length); index++)
+            Localized.SetContent(items[index], keys[index]);
+    }
+
+    private void RefreshLocalizedOptionControls()
+    {
+        SetComboItemContent(LanguageCombo, "LanguageSystem", "LanguageEnglish", "LanguageChinese");
+        SetComboItemContent(IdleMinutesCombo, "IdleMinute1", "IdleMinute3", "IdleMinute5", "IdleMinute10");
+
+        string on = LocalizationService.Get("ToggleOn");
+        string off = LocalizationService.Get("ToggleOff");
+        StartupSwitch.OnContent = on;
+        StartupSwitch.OffContent = off;
+        AutoUpdateSwitch.OnContent = on;
+        AutoUpdateSwitch.OffContent = off;
+        IdleProtectSwitch.OnContent = on;
+        IdleProtectSwitch.OffContent = off;
+        HotkeyEnabledSwitch.OnContent = on;
+        HotkeyEnabledSwitch.OffContent = off;
+
+        bool wasLoading = _loadingSettings;
+        _loadingSettings = true;
+        RefreshSelectedComboBox(LanguageCombo);
+        RefreshSelectedComboBox(IdleMinutesCombo);
+        _loadingSettings = wasLoading;
+    }
+
+    private static void RefreshSelectedComboBox(ComboBox comboBox)
+    {
+        object? selectedItem = comboBox.SelectedItem;
+        if (selectedItem is null) return;
+        comboBox.SelectedItem = null;
+        comboBox.SelectedItem = selectedItem;
+    }
+
+    private void OnRemoveButtonLoaded(object sender, RoutedEventArgs args)
+    {
+        if (sender is not Button button) return;
+        Localized.SetContent(button, "RemoveProtection");
+        Localized.SetAutomationName(button, "RemoveProtection");
+    }
+
+    private void UpdateWindowTitle() => Title = LocalizationService.Get("WindowTitle");
+
+    private void UpdateAppVersion()
+    {
+        string version = _updateService.InstalledVersion;
+        if (version == "开发版") version = LocalizationService.Get("DevelopmentBuild");
+        Localized.SetText(AppVersionText, "AppVersion", version);
+    }
+
+    private void UpdateLocalizedScopeItems()
+    {
+        bool wasLoading = _loadingSettings;
+        _loadingSettings = true;
+        int selected = IdleScopeButtons.SelectedIndex;
+        IdleScopeButtons.ItemsSource = new[]
+        {
+            LocalizationService.Get("ScopeAddedWindows"),
+            LocalizationService.Get("ScopeAllDisplays")
+        };
+        IdleScopeButtons.SelectedIndex = selected is 0 or 1 ? selected : 0;
+        _loadingSettings = wasLoading;
+    }
+
+    private void OnPickerPreviewChanged(LocalizationMessage message) =>
+        Localized.SetText(CandidateText, message.Key, message.Arguments);
+
     private void OnPickClick(object sender, RoutedEventArgs e) => StartPicker(WindowNative.GetWindowHandle(this));
 
     private void StartPicker(nint expectedForeground)
@@ -151,12 +289,12 @@ public sealed partial class MainWindow : Window
         {
             _picker.Start(expectedForeground);
             PickButton.IsEnabled = false;
-            PickButton.Content = "正在添加窗口";
+            Localized.SetContent(PickButton, "PickerInProgress");
             UpdateSummary();
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            OnNotice($"无法开始添加窗口：{ex.Message}");
+            OnNotice("UnableStartPicker");
         }
     }
 
@@ -166,39 +304,40 @@ public sealed partial class MainWindow : Window
         nint foreground = NativeMethods.GetForegroundWindow();
         if (foreground == nint.Zero || foreground == WindowNative.GetWindowHandle(this))
         {
-            OnNotice("请先切换到需要保护的应用，再按快捷键添加窗口。");
+            OnNotice("SelectAppBeforeHotkey");
             return;
         }
         try
         {
             _picker.Start(foreground);
             PickButton.IsEnabled = false;
-            PickButton.Content = "正在添加窗口";
+            Localized.SetContent(PickButton, "PickerInProgress");
             UpdateSummary();
         }
-        catch (Exception ex) { OnNotice($"无法开始添加窗口：{ex.Message}"); }
+        catch (Exception) { OnNotice("UnableStartPicker"); }
     }
 
-    private void OnPickFinished(nint target, string message)
+    private void OnPickFinished(nint target, LocalizationMessage message)
     {
         PickButton.IsEnabled = true;
-        PickButton.Content = "添加窗口";
-        CandidateText.Text = message;
+        Localized.SetContent(PickButton, "AddWindowButton");
+        Localized.SetText(CandidateText, message.Key, message.Arguments);
         if (target != nint.Zero)
         {
             try
             {
                 WindowList.SelectedItem = _manager.Attach(target);
-                OnNotice("窗口已添加。");
+                OnNotice("WindowAdded");
             }
-            catch (Exception ex) { OnNotice($"窗口尚未添加：{ex.Message}"); }
+            catch (InvalidOperationException) { OnNotice("WindowNotSelectable"); }
+            catch (Exception) { OnNotice("WindowNotAdded"); }
         }
         UpdateSummary();
     }
 
     private void UpdateSummary()
     {
-        CountText.Text = $"已添加 {_manager.Windows.Count} 个窗口";
+        Localized.SetText(CountText, "WindowCount", _manager.Windows.Count);
         bool hasWindows = _manager.Windows.Count > 0;
         ProtectAllMenuItem.IsEnabled = hasWindows && !_picker.IsActive;
         PauseAllMenuItem.IsEnabled = hasWindows && !_picker.IsActive;
@@ -207,10 +346,7 @@ public sealed partial class MainWindow : Window
         EmptyText.Visibility = hasWindows ? Visibility.Collapsed : Visibility.Visible;
     }
 
-    private void OnNotice(string message)
-    {
-        StatusText.Text = message;
-    }
+    private void OnNotice(string key) => Localized.SetText(StatusText, key);
 
     private void OnScreenPrivacyClick(object sender, RoutedEventArgs e) => ToggleManualScreen();
     private void OnResumeAutoClick(object sender, RoutedEventArgs e) => ResumeAutomaticProtection();
@@ -232,15 +368,15 @@ public sealed partial class MainWindow : Window
             ResumeScreen();
             return;
         }
-        if (_manualScreenActive) { _manualScreenActive = false; UpdateFullScreen(); return; }
-        try { _screenPrivacy.Enable(); _manualScreenActive = true; UpdateScreenButtons(); }
-        catch (Exception ex) { OnNotice("无法启用全屏保护：" + ex.Message); }
+        if (_manualScreenActive) { _manualScreenActive = false; UpdateFullScreen(animate: true); return; }
+        try { _screenPrivacy.Enable(animate: true); _manualScreenActive = true; UpdateScreenButtons(); }
+        catch (Exception) { OnNotice("UnableEnableScreen"); }
     }
     private void ResumeScreen()
     {
         _manualScreenActive = false;
         ResumeAutomaticProtection();
-        UpdateFullScreen();
+        UpdateFullScreen(animate: true);
     }
     private void ActivateIdleProtection(AutoProtectionScope scope)
     {
@@ -248,33 +384,33 @@ public sealed partial class MainWindow : Window
         if (scope == AutoProtectionScope.AddedWindows && !_manager.HasWindows) return;
         try
         {
-            if (scope == AutoProtectionScope.AllDisplays) _screenPrivacy.Enable();
-            else _manager.SetIdleForcedClosed(true);
+            if (scope == AutoProtectionScope.AllDisplays) _screenPrivacy.Enable(animate: false);
+            else _manager.SetIdleForcedClosed(true, animate: false);
             _idleScope = scope;
             UpdateScreenButtons();
         }
-        catch (Exception ex) { OnNotice("自动保护启动失败：" + ex.Message); }
+        catch (Exception) { OnNotice("AutoProtectionStartFailed"); }
     }
     private void ResumeAutomaticProtection()
     {
         if (!_idleScope.HasValue) return;
-        if (_idleScope == AutoProtectionScope.AddedWindows) _manager.SetIdleForcedClosed(false);
+        if (_idleScope == AutoProtectionScope.AddedWindows) _manager.SetIdleForcedClosed(false, animate: true);
         _idleScope = null;
-        UpdateFullScreen();
+        UpdateFullScreen(animate: true);
     }
-    private void UpdateFullScreen()
+    private void UpdateFullScreen(bool animate)
     {
         if (_manualScreenActive || _idleScope == AutoProtectionScope.AllDisplays)
         {
-            try { _screenPrivacy.Enable(); }
-            catch (Exception ex) { _manualScreenActive = false; OnNotice("全屏保护恢复失败：" + ex.Message); }
+            try { _screenPrivacy.Enable(animate); }
+            catch (Exception) { _manualScreenActive = false; OnNotice("FullScreenResumeFailed"); }
         }
-        else _screenPrivacy.Disable();
+        else _screenPrivacy.Disable(animate);
         UpdateScreenButtons();
     }
     private void UpdateScreenButtons()
     {
-        ScreenPrivacyButton.Content = _screenPrivacy.IsActive ? "恢复屏幕" : "保护整个屏幕";
+        Localized.SetContent(ScreenPrivacyButton, _screenPrivacy.IsActive ? "RestoreScreenButton" : "ProtectScreenButton");
         ResumeAutoButton.Visibility = _idleScope.HasValue ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -327,7 +463,7 @@ public sealed partial class MainWindow : Window
     {
         if ((sender as FrameworkElement)?.Tag is not ProtectedWindowItem item) return;
         _manager.Detach(item);
-        OnNotice("已移除该窗口的保护。" );
+        OnNotice("WindowRemoved");
     }
 
     private void OnSettingChanged(object sender, RoutedEventArgs e)
@@ -340,6 +476,22 @@ public sealed partial class MainWindow : Window
     {
         if (_loadingSettings) return;
         ReadSettingsAndApply();
+    }
+
+    private void OnLanguageSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loadingSettings || LanguageCombo.SelectedValue is not string selected) return;
+        var previous = _settings;
+        _settings = _settings with { Language = AppLanguage.Normalize(selected) };
+        if (!SaveSettings())
+        {
+            _settings = previous;
+            _loadingSettings = true;
+            LanguageCombo.SelectedValue = previous.Language;
+            _loadingSettings = false;
+            return;
+        }
+        LocalizationService.SetLanguage(_settings.Language);
     }
 
     private void OnAutoUpdateToggled(object sender, RoutedEventArgs e)
@@ -368,7 +520,7 @@ public sealed partial class MainWindow : Window
             _loadingSettings = true;
             StartupSwitch.IsOn = _settings.StartWithWindows;
             _loadingSettings = false;
-            SettingsStatusText.Text = error;
+            Localized.SetText(SettingsStatusText, error);
             return;
         }
         var previous = _settings;
@@ -380,10 +532,10 @@ public sealed partial class MainWindow : Window
             _loadingSettings = true;
             StartupSwitch.IsOn = previous.StartWithWindows;
             _loadingSettings = false;
-            if (rollbackError is not null) SettingsStatusText.Text += $"；启动项回滚失败：{rollbackError}";
+            if (rollbackError is not null) Localized.SetText(SettingsStatusText, "StartupRollbackFailure");
             return;
         }
-        SettingsStatusText.Text = enabled ? "已为当前用户启用开机启动。" : "已关闭开机启动。";
+        Localized.SetText(SettingsStatusText, enabled ? "StartupEnabled" : "StartupDisabled");
     }
 
     private void ReadSettingsAndApply()
@@ -400,7 +552,7 @@ public sealed partial class MainWindow : Window
         {
             if (hotkey.Enabled)
             {
-                HotkeyStatusText.Text = "启用快捷键时，请选择 F1–F11 并至少保留一个修饰键。";
+                Localized.SetText(HotkeyStatusText, "HotkeyInvalid");
                 return;
             }
             hotkey = _settings.Hotkey with { Enabled = false };
@@ -424,16 +576,24 @@ public sealed partial class MainWindow : Window
         AltModifierCheck.IsChecked = (_settings.Hotkey.Modifiers & HotkeyModifier.Alt) != 0;
         HotkeyKeyCombo.SelectedItem = HotkeyKeyCombo.Items.OfType<ComboBoxItem>().FirstOrDefault(item =>
             uint.TryParse(item.Tag?.ToString(), out uint key) && key == _settings.Hotkey.VirtualKey);
+        LanguageCombo.SelectedValue = _settings.Language;
     }
 
     private void ApplyHotkey()
     {
-        bool registered = _hotkey.Apply(_settings.Hotkey);
-        HotkeyStatusText.Text = !_settings.Hotkey.Enabled ? "快捷键已关闭。" : registered
-            ? "当前快捷键：" + DescribeHotkey(_settings.Hotkey)
-            : _hotkey.LastError == NativeMethods.ERROR_HOTKEY_ALREADY_REGISTERED
-                ? $"{DescribeHotkey(_settings.Hotkey)} 已被其他程序占用，请更改或关闭快捷键。"
-                : $"{DescribeHotkey(_settings.Hotkey)} 注册失败（错误 {_hotkey.LastError}），请更改或关闭快捷键。";
+        _hotkey.Apply(_settings.Hotkey);
+        UpdateHotkeyStatus();
+    }
+
+    private void UpdateHotkeyStatus()
+    {
+        bool registered = _hotkey.IsRegistered;
+        if (!_settings.Hotkey.Enabled) Localized.SetText(HotkeyStatusText, "HotkeyDisabled");
+        else if (registered) Localized.SetText(HotkeyStatusText, "HotkeyCurrent", DescribeHotkey(_settings.Hotkey));
+        else if (_hotkey.LastError == NativeMethods.ERROR_HOTKEY_ALREADY_REGISTERED)
+            Localized.SetText(HotkeyStatusText, "HotkeyAlreadyRegistered", DescribeHotkey(_settings.Hotkey));
+        else Localized.SetText(HotkeyStatusText, "HotkeyRegistrationFailed",
+            DescribeHotkey(_settings.Hotkey), _hotkey.LastError);
     }
 
     private static string DescribeHotkey(GlobalHotkeySettings hotkey)
@@ -451,7 +611,7 @@ public sealed partial class MainWindow : Window
     {
         try { _settingsStore.Save(_settings); return true; }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
-        { SettingsStatusText.Text = $"设置未能保存：{ex.Message}"; return false; }
+        { Localized.SetText(SettingsStatusText, "SettingsSaveFailed"); return false; }
     }
 
     // Automatic checks run silently. An explicit click is always needed to install.
@@ -477,11 +637,11 @@ public sealed partial class MainWindow : Window
                     DispatcherQueue.TryEnqueue(() =>
                     {
                         if (_disposed) return;
-                        UpdateActionButton.Content = "安装更新";
+                        Localized.SetContent(UpdateActionButton, "InstallUpdate");
                         UpdateActionButton.IsEnabled = false;
                         UpdateProgress.Visibility = Visibility.Visible;
                         UpdateProgress.Value = percent;
-                        UpdateStatusText.Text = $"正在下载更新… {percent}%";
+                        Localized.SetText(UpdateStatusText, "DownloadingPercent", percent);
                     });
                 },
                     cancellationToken: _updateShutdown.Token,
@@ -510,10 +670,10 @@ public sealed partial class MainWindow : Window
 
     private void MarkUpdateReady(string? version)
     {
-        UpdateActionButton.Content = "安装更新";
+        Localized.SetContent(UpdateActionButton, "InstallUpdate");
         UpdateActionButton.IsEnabled = !_updateInProgress && !_automaticUpdateInProgress;
         UpdateProgress.Visibility = Visibility.Collapsed;
-        UpdateStatusText.Text = $"新版本 {version ?? ""} 已下载，随时可以安装。";
+        Localized.SetText(UpdateStatusText, "UpdateReady", version ?? string.Empty);
     }
 
     private void QueueUpdateDownloading()
@@ -524,17 +684,17 @@ public sealed partial class MainWindow : Window
     private void MarkUpdateDownloading()
     {
         if (_disposed) return;
-        UpdateActionButton.Content = "安装更新";
+        Localized.SetContent(UpdateActionButton, "InstallUpdate");
         UpdateActionButton.IsEnabled = false;
         UpdateProgress.Value = 0;
         UpdateProgress.Visibility = Visibility.Visible;
-        UpdateStatusText.Text = "发现新版本，正在下载更新…";
+        Localized.SetText(UpdateStatusText, "UpdateDownloading");
     }
 
     private void RefreshUpdateActionButton()
     {
         bool ready = _backgroundUpdates.ReadyVersion is not null;
-        UpdateActionButton.Content = ready ? "安装更新" : "检查更新";
+        Localized.SetContent(UpdateActionButton, ready ? "InstallUpdate" : "CheckUpdates");
         UpdateActionButton.IsEnabled = !_updateInProgress && !_automaticUpdateInProgress;
     }
 
@@ -551,10 +711,10 @@ public sealed partial class MainWindow : Window
         UpdateActionButton.IsEnabled = false;
         try
         {
-            UpdateStatusText.Text = "正在检查更新…";
+            Localized.SetText(UpdateStatusText, "UpdateChecking");
             if (!_backgroundUpdates.IsInstalled)
             {
-                UpdateStatusText.Text = "请安装 Curtain 后再检查更新。";
+                Localized.SetText(UpdateStatusText, "UpdateNotInstalled");
                 return;
             }
 
@@ -564,24 +724,24 @@ public sealed partial class MainWindow : Window
                 DispatcherQueue.TryEnqueue(() =>
                 {
                     if (_disposed) return;
-                    UpdateActionButton.Content = "安装更新";
+                    Localized.SetContent(UpdateActionButton, "InstallUpdate");
                     UpdateActionButton.IsEnabled = false;
                     UpdateProgress.Visibility = Visibility.Visible;
                     UpdateProgress.Value = percent;
-                    UpdateStatusText.Text = $"正在下载更新… {percent}%";
+                    Localized.SetText(UpdateStatusText, "DownloadingPercent", percent);
                 });
             }, _updateShutdown.Token, QueueUpdateDownloading);
             if (_disposed) return;
             switch (result.Kind)
             {
                 case UpdateScanKind.Ready: MarkUpdateReady(result.Version); break;
-                case UpdateScanKind.Busy: UpdateStatusText.Text = "正在后台检查或下载更新，请稍候。"; break;
-                case UpdateScanKind.NotInstalled: UpdateStatusText.Text = "请安装 Curtain 后再检查更新。"; break;
-                default: UpdateStatusText.Text = "当前已是最新版本。"; break;
+                case UpdateScanKind.Busy: Localized.SetText(UpdateStatusText, "UpdateBusy"); break;
+                case UpdateScanKind.NotInstalled: Localized.SetText(UpdateStatusText, "UpdateNotInstalled"); break;
+                default: Localized.SetText(UpdateStatusText, "UpdateLatest"); break;
             }
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex) { if (!_disposed) UpdateStatusText.Text = "检查更新失败：" + ex.Message; }
+        catch (Exception) { if (!_disposed) Localized.SetText(UpdateStatusText, "UpdateCheckFailed"); }
         finally
         {
             _updateInProgress = false;
@@ -600,16 +760,16 @@ public sealed partial class MainWindow : Window
         if (ready is null)
         {
             RefreshUpdateActionButton();
-            UpdateStatusText.Text = "已下载的更新不存在，请重新检查更新。";
+            Localized.SetText(UpdateStatusText, "UpdateMissing");
             return;
         }
         var dialog = new ContentDialog
         {
             XamlRoot = Content.XamlRoot,
-            Title = "安装 Curtain " + ready,
-            Content = "安装更新需要重新启动 Curtain，现有隐私遮罩会暂时关闭。是否现在安装？",
-            PrimaryButtonText = "安装并重启",
-            CloseButtonText = "稍后",
+            Title = LocalizationService.Get("InstallUpdateTitle", ready),
+            Content = LocalizationService.Get("InstallUpdateConfirm"),
+            PrimaryButtonText = LocalizationService.Get("InstallAndRestart"),
+            CloseButtonText = LocalizationService.Get("Later"),
             DefaultButton = ContentDialogButton.Close
         };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary || _disposed) return;
@@ -617,13 +777,13 @@ public sealed partial class MainWindow : Window
         {
             if (!_backgroundUpdates.BeginApplyPending())
             {
-                UpdateStatusText.Text = "更新文件已失效，请重新检查更新。";
+                Localized.SetText(UpdateStatusText, "UpdateInvalid");
                 RefreshUpdateActionButton();
                 return;
             }
             ExitCurtain();
         }
-        catch (Exception ex) { if (!_disposed) UpdateStatusText.Text = "安装启动失败：" + ex.Message; }
+        catch (Exception) { if (!_disposed) Localized.SetText(UpdateStatusText, "UpdateInstallFailed"); }
     }
 
     private void OnWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
@@ -631,7 +791,7 @@ public sealed partial class MainWindow : Window
         if (_allowClose) return;
         args.Cancel = true;
         AppWindow.Hide();
-        OnNotice("Curtain 已隐藏到系统托盘，保护会继续运行。" );
+        OnNotice("HiddenToTray");
     }
 
     private void ExitCurtain()
@@ -673,6 +833,7 @@ public sealed partial class MainWindow : Window
         _manager.CollectionChanged -= UpdateSummary;
         _manager.Notice -= OnNotice;
         _manager.Dispose();
+        LocalizationService.LanguageChanged -= OnLanguageChanged;
         App.OnMainWindowClosed(this);
     }
 }

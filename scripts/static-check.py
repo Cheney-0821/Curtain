@@ -7,6 +7,7 @@ from xml.etree import ElementTree as ET
 import hashlib
 import json
 import re
+import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -81,6 +82,11 @@ REQUIRED_FILES = (
     "src/Curtain.App/app.manifest",
     "src/Curtain.App/Services/CurtainManager.cs",
     "src/Curtain.App/Services/CurtainSession.cs",
+    "src/Curtain.App/Services/OverlayOpacityFade.cs",
+    "src/Curtain.App/Localization/LocalizationService.cs",
+    "src/Curtain.App/Localization/Localized.cs",
+    "src/Curtain.App/Strings/en-US/Resources.resw",
+    "src/Curtain.App/Strings/zh-CN/Resources.resw",
     "src/Curtain.Core/PrivacyProfile.cs",
     "tests/Curtain.Core.Tests/Program.cs",
     "tests/Curtain.Windows.Fixture/Program.cs",
@@ -104,6 +110,51 @@ for path in xml_paths:
         ET.parse(path)
     except (ET.ParseError, OSError) as error:
         ERRORS.append(f"invalid XML {path.relative_to(ROOT)}: {error}")
+
+resource_names: dict[str, set[str]] = {}
+resource_values: dict[str, dict[str, str]] = {}
+for language in ("en-US", "zh-CN"):
+    relative = f"src/Curtain.App/Strings/{language}/Resources.resw"
+    path = ROOT / relative
+    if not path.is_file():
+        continue
+    try:
+        tree = ET.parse(path)
+        values = {
+            element.attrib["name"]: element.findtext("value", default="")
+            for element in tree.getroot().findall("data")
+            if "name" in element.attrib
+        }
+        resource_names[language] = set(values)
+        resource_values[language] = values
+    except (ET.ParseError, OSError) as error:
+        ERRORS.append(f"invalid resource file {relative}: {error}")
+
+if set(resource_names) == {"en-US", "zh-CN"}:
+    english_names = resource_names["en-US"]
+    chinese_names = resource_names["zh-CN"]
+    if english_names != chinese_names:
+        ERRORS.append("English and Chinese resource names differ")
+    for key in english_names & chinese_names:
+        en_placeholders = sorted(re.findall(r"\{(\d+)(?:[,}:])", resource_values["en-US"][key]))
+        zh_placeholders = sorted(re.findall(r"\{(\d+)(?:[,}:])", resource_values["zh-CN"][key]))
+        if en_placeholders != zh_placeholders:
+            ERRORS.append(f"resource placeholders differ for {key}")
+    referenced_keys: set[str] = set()
+    app_source = ROOT / "src/Curtain.App"
+    for source_path in (*app_source.rglob("*.xaml"), *app_source.rglob("*.cs")):
+        if {"bin", "obj"}.intersection(source_path.relative_to(ROOT).parts):
+            continue
+        try:
+            source = source_path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        referenced_keys.update(re.findall(r"Localized\.\w+Key=\"([A-Za-z]\w*)\"", source))
+        referenced_keys.update(re.findall(r"(?:LocalizationService\.Get|LocalizationMessage\.Create|Preview)\(\s*\"([A-Za-z]\w*)\"", source))
+        referenced_keys.update(re.findall(r"Localized\.Set(?:Text|Content|Header|Title)\(\s*[A-Za-z_]\w*\s*,\s*\"([A-Za-z]\w*)\"", source))
+    missing = referenced_keys - english_names - chinese_names
+    if missing:
+        ERRORS.append("localization keys are missing from both languages: " + ", ".join(sorted(missing)))
 
 tools_path = ROOT / ".config/dotnet-tools.json"
 if tools_path.is_file():
@@ -223,12 +274,34 @@ legacy_paths = [
     )),
 ]
 text_suffixes = {".md", ".py", ".ps1", ".yml", ".yaml", ".json", ".csproj"}
-for path in ROOT.rglob("*"):
+try:
+    git_paths = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+        cwd=ROOT,
+        capture_output=True,
+    )
+except OSError:
+    git_paths = None
+if git_paths is None or git_paths.returncode != 0:
+    paths_to_scan = ROOT.rglob("*")
+else:
+    paths_to_scan = (
+        ROOT / Path(raw_path.decode("utf-8", errors="surrogateescape"))
+        for raw_path in git_paths.stdout.split(b"\0")
+        if raw_path
+    )
+for path in paths_to_scan:
     if not path.is_file() or path == Path(__file__).resolve():
         continue
     if path.suffix.lower() not in text_suffixes:
         continue
+    relative_path = path.relative_to(ROOT).as_posix()
     if {"bin", "obj", ".git"}.intersection(path.relative_to(ROOT).parts):
+        continue
+    if relative_path.startswith(("development-log/", "docs/internal/")) or relative_path in {
+        "OPEN_SOURCE_AUDIT.md",
+        "scripts/B3-R2-Upload.ps1",
+    }:
         continue
     try:
         content = path.read_text(encoding="utf-8")
@@ -245,6 +318,7 @@ if ERRORS:
 
 print(f"XML valid: {len(xml_paths)} project/XAML/manifest files")
 print("JSON valid: .config/dotnet-tools.json")
+print(f"Localized resources valid: {len(resource_names.get('en-US', set()))} matching English/Chinese keys")
 print(f"README local images valid: {readme_image_count}")
 print(f"XAML event handlers found in code-behind: {event_count}")
 print(f"Required source and license paths present: {len(REQUIRED_FILES) + len(PROJECTS)}")

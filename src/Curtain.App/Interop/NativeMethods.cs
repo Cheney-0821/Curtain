@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using Curtain.App.Localization;
 using Curtain.Core.Geometry;
 
 namespace Curtain.App.Interop;
@@ -153,7 +154,9 @@ internal static class NativeMethods
     {
         var sb = new StringBuilder(512);
         GetWindowTextW(hwnd, sb, sb.Capacity);
-        return sb.Length == 0 ? $"窗口 0x{hwnd.ToInt64():X}" : sb.ToString();
+        return sb.Length == 0
+            ? LocalizationService.Get("WindowHandleFallback", hwnd.ToInt64().ToString("X"))
+            : sb.ToString();
     }
 
     public static PixelRect? GetVisibleBounds(nint hwnd)
@@ -220,15 +223,17 @@ internal static class NativeMethods
     /// Update geometry independently of relative Z-order. The previous combined call
     /// could fail to move the overlay when the preceding HWND was the overlay itself.
     /// </summary>
-    public static bool PositionAbove(nint window, nint anchor, PixelRect bounds)
+    public static bool PositionAbove(nint window, nint anchor, PixelRect bounds, bool showWindow = true)
     {
         if (window == nint.Zero || anchor == nint.Zero || window == anchor ||
             !IsWindow(window) || !IsWindow(anchor) || !bounds.IsValid)
             return false;
 
         // Geometry must still follow the target even when a Z-order adjustment fails.
+        uint geometryFlags = SWP_NOZORDER | SWP_NOACTIVATE;
+        if (showWindow) geometryFlags |= SWP_SHOWWINDOW;
         if (!SetWindowPos(window, nint.Zero, bounds.Left, bounds.Top, bounds.Width, bounds.Height,
-                SWP_NOZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW))
+                geometryFlags))
         {
             System.Diagnostics.Debug.WriteLine(
                 $"Curtain geometry SetWindowPos failed: {Marshal.GetLastPInvokeError()}");

@@ -1,0 +1,393 @@
+<?xml version='1.0' encoding='utf-8'?>
+<root>
+  <data name="WindowTitle" xml:space="preserve">
+    <value>Curtain · 窗口隐私保护</value>
+  </data>
+  <data name="AppVersion" xml:space="preserve">
+    <value>窗口隐私保护 · {0}</value>
+  </data>
+  <data name="NavigationHome" xml:space="preserve">
+    <value>窗口保护</value>
+  </data>
+  <data name="NavigationSettings" xml:space="preserve">
+    <value>设置</value>
+  </data>
+  <data name="NavigationAbout" xml:space="preserve">
+    <value>关于</value>
+  </data>
+  <data name="HomeTitle" xml:space="preserve">
+    <value>窗口保护</value>
+  </data>
+  <data name="HomeDescription" xml:space="preserve">
+    <value>选择窗口，为内容添加隐私保护。</value>
+  </data>
+  <data name="AddWindowTitle" xml:space="preserve">
+    <value>添加窗口</value>
+  </data>
+  <data name="AddWindowDescription" xml:space="preserve">
+    <value>选择你想要保护的隐私窗口。</value>
+  </data>
+  <data name="AddWindowButton" xml:space="preserve">
+    <value>添加窗口</value>
+  </data>
+  <data name="ProtectScreenButton" xml:space="preserve">
+    <value>保护整个屏幕</value>
+  </data>
+  <data name="RestoreScreenButton" xml:space="preserve">
+    <value>恢复屏幕</value>
+  </data>
+  <data name="EndAutoProtectionButton" xml:space="preserve">
+    <value>结束自动保护</value>
+  </data>
+  <data name="PickerHelp" xml:space="preserve">
+    <value>窗口已确认。</value>
+  </data>
+  <data name="PickerInProgress" xml:space="preserve">
+    <value>正在添加窗口…</value>
+  </data>
+  <data name="BulkActions" xml:space="preserve">
+    <value>批量操作</value>
+  </data>
+  <data name="ProtectAll" xml:space="preserve">
+    <value>全部保护</value>
+  </data>
+  <data name="PauseAll" xml:space="preserve">
+    <value>全部暂停</value>
+  </data>
+  <data name="EmptyWindows" xml:space="preserve">
+    <value>还没有添加窗口。</value>
+  </data>
+  <data name="RemoveProtection" xml:space="preserve">
+    <value>移除保护</value>
+  </data>
+  <data name="Ready" xml:space="preserve">
+    <value>就绪。</value>
+  </data>
+  <data name="WindowCount" xml:space="preserve">
+    <value>已添加 {0} 个窗口</value>
+  </data>
+  <data name="WindowAdded" xml:space="preserve">
+    <value>窗口已添加。</value>
+  </data>
+  <data name="WindowNotAdded" xml:space="preserve">
+    <value>窗口尚未添加。</value>
+  </data>
+  <data name="WindowRemoved" xml:space="preserve">
+    <value>已移除该窗口的保护。</value>
+  </data>
+  <data name="UnableStartPicker" xml:space="preserve">
+    <value>无法开始添加窗口。</value>
+  </data>
+  <data name="SelectAppBeforeHotkey" xml:space="preserve">
+    <value>请先切换到需要保护的应用，再按快捷键添加窗口。</value>
+  </data>
+  <data name="SettingsTitle" xml:space="preserve">
+    <value>设置</value>
+  </data>
+  <data name="GeneralTitle" xml:space="preserve">
+    <value>常规</value>
+  </data>
+  <data name="GeneralDescription" xml:space="preserve">
+    <value>设置 Curtain 的启动方式和显示语言。</value>
+  </data>
+  <data name="StartupHeader" xml:space="preserve">
+    <value>登录时启动 Curtain</value>
+  </data>
+  <data name="ToggleOn" xml:space="preserve">
+    <value>开</value>
+  </data>
+  <data name="ToggleOff" xml:space="preserve">
+    <value>关</value>
+  </data>
+  <data name="AutoUpdateHeader" xml:space="preserve">
+    <value>自动检查并下载更新</value>
+  </data>
+  <data name="LanguageHeader" xml:space="preserve">
+    <value>应用语言</value>
+  </data>
+  <data name="LanguageSystem" xml:space="preserve">
+    <value>跟随系统</value>
+  </data>
+  <data name="LanguageEnglish" xml:space="preserve">
+    <value>English</value>
+  </data>
+  <data name="LanguageChinese" xml:space="preserve">
+    <value>简体中文</value>
+  </data>
+  <data name="AutoProtectionTitle" xml:space="preserve">
+    <value>自动保护</value>
+  </data>
+  <data name="AutoProtectionDescription" xml:space="preserve">
+    <value>离开电脑一段时间后，自动保护隐私内容。</value>
+  </data>
+  <data name="EnableIdleProtection" xml:space="preserve">
+    <value>启用空闲自动保护</value>
+  </data>
+  <data name="IdleDurationHeader" xml:space="preserve">
+    <value>无操作时长</value>
+  </data>
+  <data name="IdleMinute1" xml:space="preserve">
+    <value>1 分钟</value>
+  </data>
+  <data name="IdleMinute3" xml:space="preserve">
+    <value>3 分钟</value>
+  </data>
+  <data name="IdleMinute5" xml:space="preserve">
+    <value>5 分钟</value>
+  </data>
+  <data name="IdleMinute10" xml:space="preserve">
+    <value>10 分钟</value>
+  </data>
+  <data name="AutoProtectionScopeLabel" xml:space="preserve">
+    <value>自动保护范围</value>
+  </data>
+  <data name="ScopeAddedWindows" xml:space="preserve">
+    <value>仅已添加的窗口</value>
+  </data>
+  <data name="ScopeAllDisplays" xml:space="preserve">
+    <value>整个桌面（所有显示器）</value>
+  </data>
+  <data name="AutoProtectionHotkeyHint" xml:space="preserve">
+    <value>Ctrl+Shift+F10：切换全屏保护 / 结束自动保护。</value>
+  </data>
+  <data name="HotkeyTitle" xml:space="preserve">
+    <value>快捷键</value>
+  </data>
+  <data name="EnableHotkeyHeader" xml:space="preserve">
+    <value>启用选窗快捷键</value>
+  </data>
+  <data name="HotkeyKeyHeader" xml:space="preserve">
+    <value>按键</value>
+  </data>
+  <data name="HotkeyInvalid" xml:space="preserve">
+    <value>启用快捷键时，请选择 F1–F11 并至少保留一个修饰键。</value>
+  </data>
+  <data name="HotkeyDisabled" xml:space="preserve">
+    <value>快捷键已关闭。</value>
+  </data>
+  <data name="HotkeyCurrent" xml:space="preserve">
+    <value>当前快捷键：{0}</value>
+  </data>
+  <data name="HotkeyAlreadyRegistered" xml:space="preserve">
+    <value>{0} 已被其他程序占用，请更改或关闭快捷键。</value>
+  </data>
+  <data name="HotkeyRegistrationFailed" xml:space="preserve">
+    <value>{0} 注册失败（错误 {1}），请更改或关闭快捷键。</value>
+  </data>
+  <data name="PrivacyHotkeyUnavailable" xml:space="preserve">
+    <value>Ctrl+Shift+F10 已被占用，可在首页操作全屏保护。</value>
+  </data>
+  <data name="AboutTitle" xml:space="preserve">
+    <value>关于 Curtain</value>
+  </data>
+  <data name="AboutDescription" xml:space="preserve">
+    <value>为桌面应用窗口提供可随窗口移动和缩放的磨砂隐私保护层。</value>
+  </data>
+  <data name="UpdatesTitle" xml:space="preserve">
+    <value>软件更新</value>
+  </data>
+  <data name="UpdatesDescription" xml:space="preserve">
+    <value>可自动检查并下载更新，安装时间由你决定。</value>
+  </data>
+  <data name="CheckUpdates" xml:space="preserve">
+    <value>检查更新</value>
+  </data>
+  <data name="InstallUpdate" xml:space="preserve">
+    <value>安装更新</value>
+  </data>
+  <data name="UpdateNotChecked" xml:space="preserve">
+    <value>尚未检查更新。</value>
+  </data>
+  <data name="UpdateChecking" xml:space="preserve">
+    <value>正在检查更新…</value>
+  </data>
+  <data name="UpdateDownloading" xml:space="preserve">
+    <value>发现新版本，正在下载更新…</value>
+  </data>
+  <data name="DownloadingPercent" xml:space="preserve">
+    <value>正在下载更新… {0}%</value>
+  </data>
+  <data name="UpdateReady" xml:space="preserve">
+    <value>新版本 {0} 已下载，随时可以安装。</value>
+  </data>
+  <data name="UpdateBusy" xml:space="preserve">
+    <value>正在后台检查或下载更新，请稍候。</value>
+  </data>
+  <data name="UpdateNotInstalled" xml:space="preserve">
+    <value>请安装 Curtain 后再检查更新。</value>
+  </data>
+  <data name="UpdateLatest" xml:space="preserve">
+    <value>当前已是最新版本。</value>
+  </data>
+  <data name="UpdateCheckFailed" xml:space="preserve">
+    <value>检查更新失败。</value>
+  </data>
+  <data name="UpdateMissing" xml:space="preserve">
+    <value>已下载的更新不存在，请重新检查更新。</value>
+  </data>
+  <data name="UpdateInvalid" xml:space="preserve">
+    <value>更新文件已失效，请重新检查更新。</value>
+  </data>
+  <data name="UpdateInstallFailed" xml:space="preserve">
+    <value>安装启动失败。</value>
+  </data>
+  <data name="InstallUpdateTitle" xml:space="preserve">
+    <value>安装 Curtain {0}</value>
+  </data>
+  <data name="InstallUpdateConfirm" xml:space="preserve">
+    <value>安装更新需要重新启动 Curtain，现有隐私遮罩会暂时关闭。是否现在安装？</value>
+  </data>
+  <data name="InstallAndRestart" xml:space="preserve">
+    <value>安装并重启</value>
+  </data>
+  <data name="Later" xml:space="preserve">
+    <value>稍后</value>
+  </data>
+  <data name="SettingsReadFailed" xml:space="preserve">
+    <value>设置文件无法读取，已使用安全的默认设置。</value>
+  </data>
+  <data name="SettingsSaveFailed" xml:space="preserve">
+    <value>设置未能保存。</value>
+  </data>
+  <data name="StartupRunKeyUnavailable" xml:space="preserve">
+    <value>无法访问当前用户的开机启动设置。</value>
+  </data>
+  <data name="StartupPathUnavailable" xml:space="preserve">
+    <value>无法获取 Curtain 的启动路径。</value>
+  </data>
+  <data name="StartupPathTooLong" xml:space="preserve">
+    <value>Curtain 的启动命令过长。</value>
+  </data>
+  <data name="StartupUpdateFailed" xml:space="preserve">
+    <value>无法更新开机启动设置。</value>
+  </data>
+  <data name="StartupRollbackFailure" xml:space="preserve">
+    <value>无法回滚开机启动项。</value>
+  </data>
+  <data name="StartupEnabled" xml:space="preserve">
+    <value>已为当前用户启用开机启动。</value>
+  </data>
+  <data name="StartupDisabled" xml:space="preserve">
+    <value>已关闭开机启动。</value>
+  </data>
+  <data name="UnableEnableScreen" xml:space="preserve">
+    <value>无法启用全屏保护。</value>
+  </data>
+  <data name="AutoProtectionStartFailed" xml:space="preserve">
+    <value>自动保护启动失败。</value>
+  </data>
+  <data name="FullScreenResumeFailed" xml:space="preserve">
+    <value>全屏保护恢复失败。</value>
+  </data>
+  <data name="HiddenToTray" xml:space="preserve">
+    <value>Curtain 已隐藏到系统托盘，保护会继续运行。</value>
+  </data>
+  <data name="OverlayErrorWindowRemoved" xml:space="preserve">
+    <value>遮罩遇到错误，已结束该窗口的保护。</value>
+  </data>
+  <data name="TargetClosedWindowRemoved" xml:space="preserve">
+    <value>目标窗口已关闭，已结束保护。</value>
+  </data>
+  <data name="TargetWindowNotForeground" xml:space="preserve">
+    <value>请将目标窗口切换到前台后再保护。</value>
+  </data>
+  <data name="PointerCaptureFailed" xml:space="preserve">
+    <value>遮罩无法捕获鼠标输入。</value>
+  </data>
+  <data name="MoveNotSupported" xml:space="preserve">
+    <value>此窗口不支持通过拖动遮罩移动。</value>
+  </data>
+  <data name="MoveFailed" xml:space="preserve">
+    <value>窗口移动失败。</value>
+  </data>
+  <data name="WindowUnavailable" xml:space="preserve">
+    <value>暂不可用</value>
+  </data>
+  <data name="Protected" xml:space="preserve">
+    <value>保护中</value>
+  </data>
+  <data name="Paused" xml:space="preserve">
+    <value>已暂停</value>
+  </data>
+  <data name="PauseProtection" xml:space="preserve">
+    <value>暂停保护</value>
+  </data>
+  <data name="EnableProtection" xml:space="preserve">
+    <value>恢复保护</value>
+  </data>
+  <data name="TrayTooltip" xml:space="preserve">
+    <value>Curtain 窗口隐私保护</value>
+  </data>
+  <data name="TrayOpen" xml:space="preserve">
+    <value>打开 Curtain</value>
+  </data>
+  <data name="TrayPauseAll" xml:space="preserve">
+    <value>暂停全部保护</value>
+  </data>
+  <data name="TrayProtectAll" xml:space="preserve">
+    <value>保护全部窗口</value>
+  </data>
+  <data name="TrayExit" xml:space="preserve">
+    <value>退出 Curtain</value>
+  </data>
+  <data name="TrayIconCreationFailed" xml:space="preserve">
+    <value>无法创建 Curtain 托盘图标。</value>
+  </data>
+  <data name="ScreenPrivacyTitle" xml:space="preserve">
+    <value>Curtain · 全屏隐私保护</value>
+  </data>
+  <data name="ResumeUse" xml:space="preserve">
+    <value>恢复使用</value>
+  </data>
+  <data name="PickerNoForeground" xml:space="preserve">
+    <value>请先切换到需要保护的窗口。</value>
+  </data>
+  <data name="PickerCancelled" xml:space="preserve">
+    <value>已取消窗口选择。</value>
+  </data>
+  <data name="PickerConfirmationFailed" xml:space="preserve">
+    <value>无法确认所选窗口。</value>
+  </data>
+  <data name="PickerPromptF8" xml:space="preserve">
+    <value>按 F8 取消。</value>
+  </data>
+  <data name="PickerPromptClick" xml:space="preserve">
+    <value>单击窗口添加，右键取消。</value>
+  </data>
+  <data name="PickerFailedStart" xml:space="preserve">
+    <value>无法启动窗口选择。</value>
+  </data>
+  <data name="PickerEnded" xml:space="preserve">
+    <value>窗口选择已结束。</value>
+  </data>
+  <data name="PickerFailedSafely" xml:space="preserve">
+    <value>发生错误，已安全停止窗口选择。</value>
+  </data>
+  <data name="PickerMoveF8" xml:space="preserve">
+    <value>将指针移到窗口上进行预览，按 F8 取消。</value>
+  </data>
+  <data name="PickerMoveClick" xml:space="preserve">
+    <value>将指针移到窗口上进行预览，右键取消。</value>
+  </data>
+  <data name="PickerTargetF8" xml:space="preserve">
+    <value>{0} — 单击添加保护，按 F8 取消。</value>
+  </data>
+  <data name="PickerTargetClick" xml:space="preserve">
+    <value>{0} — 单击添加保护，右键取消。</value>
+  </data>
+  <data name="PickerConfirmed" xml:space="preserve">
+    <value>窗口已确认。</value>
+  </data>
+  <data name="PickerSelectionEnded" xml:space="preserve">
+    <value>窗口选择已结束。</value>
+  </data>
+  <data name="WindowNotSelectable" xml:space="preserve">
+    <value>此窗口无法添加保护。</value>
+  </data>
+  <data name="DevelopmentBuild" xml:space="preserve">
+    <value>开发版</value>
+  </data>
+  <data name="WindowHandleFallback" xml:space="preserve">
+    <value>窗口 0x{0}</value>
+  </data>
+</root>

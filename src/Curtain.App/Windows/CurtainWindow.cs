@@ -4,20 +4,22 @@ using Curtain.Core.Geometry;
 using Microsoft.UI;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Composition.SystemBackdrops;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using WinRT;
 using WinRT.Interop;
+using Windows.UI.ViewManagement;
 
 namespace Curtain.App.Windows;
 
 internal sealed class CurtainWindow : Window
 {
     private readonly Grid _surface;
-    private readonly global::Windows.UI.ViewManagement.UISettings _uiSettings = new();
+    private OverlayOpacityFade? _fade;
     private DesktopAcrylicController? _acrylic;
-    private SystemBackdropConfiguration? _configuration;
+    private SystemBackdropConfiguration? _backdropConfiguration;
     private bool? _lastMaximized;
     private bool _disposed;
     private Microsoft.UI.Xaml.Input.Pointer? _pointer;
@@ -29,7 +31,7 @@ internal sealed class CurtainWindow : Window
 
     public CurtainWindow()
     {
-        _surface = new Grid { Background = new SolidColorBrush(Colors.Transparent) };
+        _surface = new Grid { Background = new SolidColorBrush(global::Windows.UI.Color.FromArgb(255, 48, 48, 48)) };
         _surface.PointerPressed += OnPointerPressed;
         _surface.PointerMoved += OnPointerMoved;
         _surface.PointerReleased += (_, e) => { e.Handled = true; ReleaseSurfaceCapture(); };
@@ -38,11 +40,9 @@ internal sealed class CurtainWindow : Window
         Content = _surface;
         Handle = WindowNative.GetWindowHandle(this);
         NativeMethods.RemoveWindowChrome(Handle);
-        InitializeAcrylic();
-        _uiSettings.AdvancedEffectsEnabledChanged += OnEffectsChanged;
+        if (InitializeBackdrop()) _surface.Background = new SolidColorBrush(Colors.Transparent);
+        _fade = new OverlayOpacityFade(Handle, DispatcherQueue);
         Closed += (_, _) => ReleaseResources();
-        AppWindow.Show(false);
-        NativeMethods.ShowWindow(Handle, NativeMethods.SW_HIDE);
     }
 
     private void ReleaseResources()
@@ -50,9 +50,45 @@ internal sealed class CurtainWindow : Window
         if (_disposed) return;
         _disposed = true;
         ReleaseSurfaceCapture();
-        _uiSettings.AdvancedEffectsEnabledChanged -= OnEffectsChanged;
-        if (_acrylic is not null) _acrylic.StateChanged -= OnMaterialStateChanged;
-        _acrylic?.Dispose(); _acrylic = null; _configuration = null;
+        _fade?.Dispose(); _fade = null;
+        _acrylic?.Dispose(); _acrylic = null;
+        _backdropConfiguration = null;
+    }
+
+    private bool InitializeBackdrop()
+    {
+        DesktopAcrylicController? candidate = null;
+        try
+        {
+            if (!DesktopAcrylicController.IsSupported()) throw new NotSupportedException();
+            DispatcherQueue.EnsureSystemDispatcherQueue();
+            _backdropConfiguration = new SystemBackdropConfiguration
+            {
+                IsInputActive = true,
+                Theme = SystemBackdropTheme.Light
+            };
+            candidate = new DesktopAcrylicController
+            {
+                Kind = DesktopAcrylicKind.Base,
+                TintColor = Colors.White,
+                TintOpacity = 0,
+                LuminosityOpacity = 0,
+                FallbackColor = global::Windows.UI.Color.FromArgb(255, 48, 48, 48)
+            };
+            if (!candidate.AddSystemBackdropTarget(this.As<ICompositionSupportsSystemBackdrop>()))
+                throw new InvalidOperationException("Backdrop target rejected.");
+            candidate.SetSystemBackdropConfiguration(_backdropConfiguration);
+            _acrylic = candidate;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            candidate?.Dispose();
+            _acrylic = null;
+            _backdropConfiguration = null;
+            DevelopmentDiagnostics.Write("backdrop-host-fallback", new { exception = ex.GetType().Name, ex.HResult });
+            return false;
+        }
     }
     internal void CloseOwnedWindow()
     {
@@ -61,47 +97,26 @@ internal sealed class CurtainWindow : Window
         ReleaseResources();
     }
 
-    private void InitializeAcrylic()
-    {
-        DesktopAcrylicController? candidate = null;
-        try
-        {
-            if (!DesktopAcrylicController.IsSupported()) throw new NotSupportedException();
-            DispatcherQueue.EnsureSystemDispatcherQueue();
-            _configuration = new SystemBackdropConfiguration { IsInputActive = true, Theme = SystemBackdropTheme.Light };
-            candidate = new DesktopAcrylicController { Kind = DesktopAcrylicKind.Base,
-                TintColor = Colors.White, TintOpacity = 0, LuminosityOpacity = 0,
-                FallbackColor = global::Windows.UI.Color.FromArgb(255, 48, 48, 48) };
-            if (!candidate.AddSystemBackdropTarget(this.As<ICompositionSupportsSystemBackdrop>()))
-                throw new InvalidOperationException("Backdrop target rejected");
-            candidate.SetSystemBackdropConfiguration(_configuration);
-            _acrylic = candidate;
-            candidate.StateChanged += OnMaterialStateChanged;
-            DevelopmentDiagnostics.Write("material-api", new {
-                properties = typeof(DesktopAcrylicController).GetProperties().Select(p => p.Name).ToArray() });
-            Log("initial");
-        }
-        catch (Exception ex)
-        {
-            candidate?.Dispose(); _acrylic = null; _configuration = null;
-            _surface.Background = new SolidColorBrush(global::Windows.UI.Color.FromArgb(255, 48, 48, 48));
-            DevelopmentDiagnostics.Write("material-fallback", new { exception = ex.GetType().Name, ex.HResult });
-        }
-    }
+    internal bool IsVisible => _fade?.IsVisible == true;
 
-    private void OnMaterialStateChanged(ISystemBackdropControllerWithTargets sender, object args)
-    {
-        RefreshMaterialPolicy("state");
-    }
-
-    private void OnEffectsChanged(global::Windows.UI.ViewManagement.UISettings sender, object args) =>
-        RefreshMaterialPolicy("system-effects");
-
-    private void RefreshMaterialPolicy(string reason) => DispatcherQueue.TryEnqueue(() =>
+    internal void SetProtectedVisible(bool visible, bool animate, long? batchStart = null)
     {
         if (_disposed) return;
-        Log(reason);
-    });
+        bool canAnimate = animate && _acrylic is not null && SystemEffectsAllowAnimation();
+        _fade?.SetVisible(visible, canAnimate, batchStart);
+    }
+
+    internal void CancelAndHide() => _fade?.CancelAndHide();
+
+    private static bool SystemEffectsAllowAnimation()
+    {
+        try
+        {
+            var settings = new UISettings();
+            return settings.AnimationsEnabled && settings.AdvancedEffectsEnabled;
+        }
+        catch { return false; }
+    }
 
     private void OnPointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
@@ -123,17 +138,6 @@ internal sealed class CurtainWindow : Window
         if (NativeMethods.IsWindow(Handle)) _surface.ReleasePointerCapture(pointer);
         SurfaceEnded?.Invoke();
     }
-    private void Log(string reason)
-    {
-        DevelopmentDiagnostics.Write("material", new { reason,
-            requestedTint = 0, requestedLuminosity = 0,
-            actualTint = _acrylic?.TintOpacity, actualLuminosity = _acrylic?.LuminosityOpacity,
-            color = _acrylic is null ? null : new { _acrylic.TintColor.A, _acrylic.TintColor.R, _acrylic.TintColor.G, _acrylic.TintColor.B },
-            state = _acrylic?.State.ToString(), systemEffectsEnabled = _uiSettings.AdvancedEffectsEnabled,
-            fallbackExpected = _acrylic is null || !_uiSettings.AdvancedEffectsEnabled ||
-                _acrylic.State != SystemBackdropState.Active });
-    }
-
     public void SetTargetMaximized(bool maximized)
     {
         if (_lastMaximized == maximized) return;

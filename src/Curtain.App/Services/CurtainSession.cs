@@ -17,6 +17,7 @@ internal sealed class CurtainSession : IDisposable
     private (DockedPin Placement, PixelRect Target, int Dpi)? _lastPlacement;
     private bool _disposed;
     private bool? _lastClosed;
+    private bool? _lastAppliedProtectionState;
     private bool _manualClosed = true;
     private bool _idleForcedClosed;
     // A temporary per-window choice while this idle-protection cycle remains active.
@@ -63,12 +64,12 @@ internal sealed class CurtainSession : IDisposable
     internal bool OwnsOverlay(nint hwnd) => _curtain?.Handle == hwnd || _pin?.Handle == hwnd;
     private bool IsCurrent() => _process is not null && TargetWindow.Matches(Target.Identity, _process);
     internal void Toggle() => SetClosed(!Target.IsClosed);
-    internal void SetIdleForcedClosed(bool active)
+    internal void SetIdleForcedClosed(bool active, bool animate = false)
     {
         if (_disposed || _idleForcedClosed == active) return;
         _idleForcedClosed = active;
         _idleUserOverrideClosed = null;
-        ApplyEffectiveState();
+        ApplyEffectiveState(animate);
     }
 
     internal void SetClosed(bool closed)
@@ -81,41 +82,43 @@ internal sealed class CurtainSession : IDisposable
             _idleUserOverrideClosed = closed;
         }
         else _manualClosed = closed;
-        ApplyEffectiveState();
+        ApplyEffectiveState(animate: true);
     }
 
     internal void ReapplyIdleForcedClosed()
     {
         if (_disposed || !_idleForcedClosed || _idleUserOverrideClosed is null) return;
         _idleUserOverrideClosed = null;
-        ApplyEffectiveState();
+        ApplyEffectiveState(animate: false);
     }
 
-    private void ApplyEffectiveState()
+    private void ApplyEffectiveState(bool animate)
     {
         CancelGesture();
         Target.SetClosed(_idleForcedClosed
             ? (_idleUserOverrideClosed ?? true)
             : _manualClosed);
-        RefreshSafely();
+        RefreshSafely(animateVisibilityChange: animate, forceVisibilityUpdate: true);
     }
-    internal void RefreshSafely()
+    internal void RefreshSafely() => RefreshSafely(animateVisibilityChange: false, forceVisibilityUpdate: false);
+
+    private void RefreshSafely(bool animateVisibilityChange, bool forceVisibilityUpdate)
     {
         if (_disposed) return;
-        try { Refresh(); }
+        try { Refresh(animateVisibilityChange, forceVisibilityUpdate); }
         catch (Exception ex)
         {
             DevelopmentDiagnostics.Write("session-error", new { target = Target.Identity.Handle,
                 exception = ex.GetType().Name, ex.HResult });
-            Ended?.Invoke(this, "一个窗口的保护出现异常，已解除该窗口；其他窗口继续保护。");
+            Ended?.Invoke(this, "OverlayErrorWindowRemoved");
         }
     }
-    private void Refresh()
+    private void Refresh(bool animateVisibilityChange = false, bool forceVisibilityUpdate = false)
     {
         if (_curtain is null || _pin is null) return;
         if (IsDestroyed || !IsCurrent())
         {
-            Ended?.Invoke(this, "目标窗口已关闭，自动解除该窗口的保护。");
+            Ended?.Invoke(this, "TargetClosedWindowRemoved");
             return;
         }
         WindowMetadataDiagnostics.Poll(Handle);
@@ -126,7 +129,8 @@ internal sealed class CurtainSession : IDisposable
         {
             CancelGesture();
             NativeMethods.ShowWindow(_pin.Handle, NativeMethods.SW_HIDE);
-            NativeMethods.ShowWindow(_curtain.Handle, NativeMethods.SW_HIDE);
+            _curtain.CancelAndHide();
+            _lastAppliedProtectionState = null;
             return;
         }
         if (_drag is not null && ((NativeMethods.GetAsyncKeyState(0x01) & 0x8000) == 0 ||
@@ -143,16 +147,14 @@ internal sealed class CurtainSession : IDisposable
         }
         if (_lastClosed != Target.IsClosed) { _lastClosed = Target.IsClosed; _pin.UpdateState(Target.IsClosed); }
         _pin.UpdatePlacement(placement, dpi);
-        if (Target.IsClosed)
+        NativeMethods.PositionAbove(_curtain.Handle, Handle, bounds.Value, showWindow: false);
+        _curtain.SetTargetMaximized(NativeMethods.IsZoomed(Handle));
+        nint pinAnchor = Target.IsClosed || _curtain.IsVisible ? _curtain.Handle : Handle;
+        NativeMethods.PositionAbove(_pin.Handle, pinAnchor, placement.Bounds);
+        if (forceVisibilityUpdate || _lastAppliedProtectionState != Target.IsClosed)
         {
-            NativeMethods.PositionAbove(_curtain.Handle, Handle, bounds.Value);
-            _curtain.SetTargetMaximized(NativeMethods.IsZoomed(Handle));
-            NativeMethods.PositionAbove(_pin.Handle, _curtain.Handle, placement.Bounds);
-        }
-        else
-        {
-            NativeMethods.ShowWindow(_curtain.Handle, NativeMethods.SW_HIDE);
-            NativeMethods.PositionAbove(_pin.Handle, Handle, placement.Bounds);
+            _curtain.SetProtectedVisible(Target.IsClosed, animateVisibilityChange);
+            _lastAppliedProtectionState = Target.IsClosed;
         }
     }
     private void OnPressed(PixelPoint point)
@@ -162,15 +164,15 @@ internal sealed class CurtainSession : IDisposable
         RefreshSafely();
         bool activated = NativeMethods.GetForegroundWindow() == Handle;
         DevelopmentDiagnostics.Write("activation", new { target = Target.Identity.Handle, accepted, activated });
-        if (!activated) Notice?.Invoke("Windows暂未允许这个窗口置前；窗帘仍保持，请从任务栏切回目标。");
+        if (!activated) Notice?.Invoke("TargetWindowNotForeground");
         if (_disposed || NativeMethods.GetVisibleBounds(Handle) is not { } visible ||
             !NativeMethods.GetWindowRect(Handle, out var raw)) return;
         if (_curtain?.HasSurfaceCapture != true)
-        { Notice?.Invoke("这次鼠标捕获未成功，已保留单击置前；请重新按下后拖动。"); return; }
+        { Notice?.Invoke("PointerCaptureFailed"); return; }
         int dpi = Math.Max(96, (int)NativeMethods.GetDpiForWindow(Handle));
         var monitor = NativeMethods.GetMonitorBounds(Handle, visible);
         if (!DragGesture.CanMove(visible, monitor.Work, monitor.Monitor, NativeMethods.IsZoomed(Handle), dpi))
-        { Notice?.Invoke("最大化、全屏或贴靠窗口暂不拖动；可以单击置前，先还原后再拖动。"); return; }
+        { Notice?.Invoke("MoveNotSupported"); return; }
         _drag = new(point, raw.ToPixelRect(), Math.Max(1, NativeMethods.GetSystemMetricsForDpi(68, (uint)dpi) / 2),
             Math.Max(1, NativeMethods.GetSystemMetricsForDpi(69, (uint)dpi) / 2));
     }
@@ -194,7 +196,7 @@ internal sealed class CurtainSession : IDisposable
         {
             DevelopmentDiagnostics.Write("drag-failed", new { target = Target.Identity.Handle,
                 error = Marshal.GetLastPInvokeError() });
-            CancelGesture(); Notice?.Invoke("这个窗口未接受移动，已结束本次拖动。");
+            CancelGesture(); Notice?.Invoke("MoveFailed");
         }
         // The batch already positioned all three windows. WinEvent/watchdog reconcile actual bounds.
         if (!moved) RefreshSafely();
@@ -208,13 +210,14 @@ internal sealed class CurtainSession : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        Item.Dispose();
         CancelGesture(); _hooks?.Dispose(); _hooks = null;
         _process?.Dispose(); _process = null;
         if (_pin is not null) { _pin.ToggleRequested -= Toggle; _pin.Close(); _pin = null; }
         if (_curtain is not null)
         {
             _curtain.SurfacePressed -= OnPressed; _curtain.SurfaceMoved -= OnMoved;
-            _curtain.SurfaceEnded -= CancelGesture; _curtain.CloseOwnedWindow(); _curtain = null;
+            _curtain.SurfaceEnded -= CancelGesture; _curtain.CancelAndHide(); _curtain.CloseOwnedWindow(); _curtain = null;
         }
     }
 }

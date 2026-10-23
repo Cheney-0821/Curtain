@@ -1,4 +1,5 @@
 using Curtain.App.Interop;
+using Curtain.App.Localization;
 using Curtain.App.Windows;
 using Curtain.Core.Geometry;
 using Curtain.Core.Selection;
@@ -19,12 +20,12 @@ internal sealed class WindowPicker : IDisposable
     private SelectionMouseHook? _hook;
     private WindowIdentity? _candidate;
     private DateTime _until;
-    private string _lastPreview = "";
+    private LocalizationMessage? _lastPreview;
     private bool _f8Down;
     private int _generation;
     public bool IsActive { get; private set; }
-    public event Action<string>? PreviewChanged;
-    public event Action<nint, string>? Finished;
+    public event Action<LocalizationMessage>? PreviewChanged;
+    public event Action<nint, LocalizationMessage>? Finished;
     internal WindowPicker(CurtainManager manager, DispatcherQueue dispatcher, nint management)
     {
         _manager = manager; _dispatcher = dispatcher; _management = management;
@@ -37,7 +38,7 @@ internal sealed class WindowPicker : IDisposable
     internal void Start(nint expectedForeground)
     {
         if (IsActive) return;
-        if (expectedForeground == nint.Zero) throw new InvalidOperationException("无法确定选窗开始时的前台窗口。");
+        if (expectedForeground == nint.Zero) throw new InvalidOperationException("PickerNoForeground");
         _outline = new SelectionOutlineWindow();
         IsActive = true; _candidate = null; _until = DateTime.UtcNow.AddSeconds(45);
         _expectedForeground = expectedForeground;
@@ -50,13 +51,13 @@ internal sealed class WindowPicker : IDisposable
                 if (!IsActive || generation != _generation) return;
                 try
                 {
-                    if (outcome == SelectionOutcome.Cancel) Stop(0, "已取消选择。");
+                    if (outcome == SelectionOutcome.Cancel) Stop(0, "PickerCancelled");
                     else Confirm(point);
                 }
                 catch (Exception ex)
                 {
                     DevelopmentDiagnostics.Write("picker-confirm-error", new { exception = ex.GetType().Name, ex.HResult });
-                    Stop(0, "确认遇到异常，已安全结束，请重试。");
+                    Stop(0, "PickerConfirmationFailed");
                 }
             });
             if (!_hook.IsInstalled)
@@ -67,10 +68,10 @@ internal sealed class WindowPicker : IDisposable
             _spotlight = new SelectionSpotlightWindow();
             _spotlight.Update(null);
             _timer.Start();
-            Preview(_hook is null ? "移动鼠标选择窗口，按 F8 确认，Esc 取消。" : "移动鼠标选择窗口，单击确认，Esc 取消。");
+            Preview(_hook is null ? "PickerPromptF8" : "PickerPromptClick");
             DevelopmentDiagnostics.Write("picker-start", new { safeMouseConfirmation = _hook is not null });
         }
-        catch { Stop(0, "选窗未能启动。"); throw; }
+        catch { Stop(0, "PickerFailedStart"); throw; }
     }
     private void OnTick(DispatcherQueueTimer sender, object args)
     {
@@ -78,8 +79,8 @@ internal sealed class WindowPicker : IDisposable
         try
         {
             if (DateTime.UtcNow >= _until || NativeMethods.GetForegroundWindow() != _expectedForeground)
-            { Stop(0, "选择已结束，请重新开始。"); return; }
-            if ((NativeMethods.GetAsyncKeyState(0x1B) & 0x8000) != 0) { Stop(0, "已取消选择。"); return; }
+            { Stop(0, "PickerEnded"); return; }
+            if ((NativeMethods.GetAsyncKeyState(0x1B) & 0x8000) != 0) { Stop(0, "PickerCancelled"); return; }
             if (!NativeMethods.GetCursorPos(out var cursor)) return;
             var point = new PixelPoint(cursor.X, cursor.Y);
             Update(point);
@@ -90,7 +91,7 @@ internal sealed class WindowPicker : IDisposable
         catch (Exception ex)
         {
             DevelopmentDiagnostics.Write("picker-error", new { exception = ex.GetType().Name, ex.HResult });
-            Stop(0, "选窗出现异常，已安全结束，请重试。");
+            Stop(0, "PickerFailedSafely");
         }
     }
     private nint RootAt(PixelPoint point)
@@ -107,37 +108,38 @@ internal sealed class WindowPicker : IDisposable
             NativeMethods.GetVisibleBounds(root) is not { } bounds)
         {
             _candidate = null; _spotlight?.Update(null); _outline?.Hide();
-            Preview(_hook is null ? "移动到需要保护的窗口，按 F8 确认。" : "移动到需要保护的窗口，单击确认。");
+            Preview(_hook is null ? "PickerMoveF8" : "PickerMoveClick");
             return;
         }
         _candidate = identity;
         int dpi = Math.Max(96, (int)NativeMethods.GetDpiForWindow(root));
         _spotlight?.Update(bounds, dpi);
         _outline?.Show(bounds, dpi);
-        Preview($"{NativeMethods.TitleOf(root)} · " + (_hook is null ? "F8确认" : "单击确认"));
+        Preview(_hook is null ? "PickerTargetF8" : "PickerTargetClick", NativeMethods.TitleOf(root));
     }
     private void Confirm(PixelPoint point)
     {
         Update(point);
         if (_candidate is not { } identity || !TargetWindow.Matches(identity)) return;
-        Stop((nint)identity.Handle, "窗口已确认。");
+        Stop((nint)identity.Handle, "PickerConfirmed");
     }
-    private void Preview(string text)
+    private void Preview(string key, params object?[] arguments)
     {
-        if (_lastPreview == text) return;
-        _lastPreview = text; PreviewChanged?.Invoke(text);
+        if (_lastPreview is { } last && last.Key == key && last.Arguments.SequenceEqual(arguments)) return;
+        _lastPreview = LocalizationMessage.Create(key, arguments);
+        PreviewChanged?.Invoke(_lastPreview);
     }
-    private void Stop(nint selected, string message)
+    private void Stop(nint selected, string key)
     {
         bool wasActive = IsActive;
         IsActive = false; ++_generation; _timer.Stop();
         _hook?.Dispose(); _hook = null;
         _outline?.Dispose(); _outline = null;
         _spotlight?.Dispose(); _spotlight = null;
-        _candidate = null; _lastPreview = "";
+        _candidate = null; _lastPreview = null;
         DevelopmentDiagnostics.Write("picker-ended", new { selected = selected.ToInt64() });
-        if (wasActive) Finished?.Invoke(selected, message);
+        if (wasActive) Finished?.Invoke(selected, LocalizationMessage.Create(key));
     }
     public void Dispose()
-    { Stop(0, "选择已结束。"); _timer.Tick -= OnTick; }
+    { Stop(0, "PickerSelectionEnded"); _timer.Tick -= OnTick; }
 }

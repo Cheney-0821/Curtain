@@ -15,6 +15,41 @@ public sealed record GlobalHotkeySettings(bool Enabled = true, uint Modifiers = 
 
 public enum AutoProtectionScope { AddedWindows = 0, AllDisplays = 1 }
 
+public static class OverlayBlurPreset
+{
+    public const string Light = "Light";
+    public const string Standard = "Standard";
+    public const string Strong = "Strong";
+
+    public static string Normalize(string? preset) => preset switch
+    {
+        Light => Light,
+        Strong => Strong,
+        _ => Standard
+    };
+
+    public static float Amount(string? preset) => Normalize(preset) switch
+    {
+        Light => 2.0f,
+        Strong => 9.0f,
+        _ => 5.0f
+    };
+}
+
+public static class AppLanguage
+{
+    public const string System = "System";
+    public const string English = "en-US";
+    public const string Chinese = "zh-CN";
+
+    public static string Normalize(string? language) => language switch
+    {
+        English => English,
+        Chinese => Chinese,
+        _ => System
+    };
+}
+
 public sealed record AutoProtectionSettings(bool Enabled = false, int IdleMinutes = 3,
     AutoProtectionScope Scope = AutoProtectionScope.AddedWindows);
 
@@ -26,6 +61,8 @@ public sealed record CurtainUserSettings
     public bool AutoDownloadUpdates { get; init; } = true;
     public GlobalHotkeySettings Hotkey { get; init; } = new();
     public AutoProtectionSettings AutoProtection { get; init; } = new();
+    public string BlurPreset { get; init; } = OverlayBlurPreset.Standard;
+    public string Language { get; init; } = AppLanguage.System;
 }
 
 public sealed record CurtainUserSettingsLoad(CurtainUserSettings Settings, bool RecoveredFromInvalidFile);
@@ -51,7 +88,7 @@ public sealed class CurtainUserSettingsStore
             if (info.Length is <= 0 or > MaximumFileBytes) return new(new CurtainUserSettings(), true);
             var settings = JsonSerializer.Deserialize<CurtainUserSettings>(File.ReadAllText(_path), _json);
             if (settings is null || !IsValid(settings)) return new(new CurtainUserSettings(), true);
-            return new(settings, false);
+            return new(NormalizeNewSettings(settings), false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -62,6 +99,7 @@ public sealed class CurtainUserSettingsStore
     public void Save(CurtainUserSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
+        settings = NormalizeNewSettings(settings);
         if (!IsValid(settings)) throw new ArgumentException("Invalid Curtain settings.", nameof(settings));
         Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
         string temporary = _path + ".tmp";
@@ -74,6 +112,12 @@ public sealed class CurtainUserSettingsStore
         settings.AutoProtection is { } auto &&
         auto.IdleMinutes is 1 or 3 or 5 or 10 &&
         Enum.IsDefined(auto.Scope);
+
+    private static CurtainUserSettings NormalizeNewSettings(CurtainUserSettings settings) => settings with
+    {
+        BlurPreset = OverlayBlurPreset.Normalize(settings.BlurPreset),
+        Language = AppLanguage.Normalize(settings.Language)
+    };
 
     public static bool IsValidHotkey(GlobalHotkeySettings hotkey)
     {

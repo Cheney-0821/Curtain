@@ -1,6 +1,6 @@
 # Curtain 当前开发与发布状态
 
-更新：2026-10-27。Beta5.3 条件发布流程已获用户授权，当前正在执行；远端公开版本仍为 `v0.2.0-beta.5.2`，在完成 GitHub、R2 和更新抽检前不宣称 Beta5.3 已公开。
+更新：2026-10-27。`0.2.0-beta.5.3` 已发布为 GitHub 预发布，Beta 更新源也已写入 beta.5.3 索引。发布状态与仍未验证的线上原位更新如下。
 
 ## 仓库与工作流
 
@@ -25,16 +25,18 @@
 | Windows 动画关闭回退 | Not tested | 设备专项未测；用户知悉并接受该发布限制 |
 | DPI 缩放、跨屏、热插拔及多屏同步 | Not tested | 设备专项未测；用户知悉并接受该发布限制 |
 | Windows 10 独立实机兼容 | Not tested | 目前主要在 Windows 11 上验证 |
-| beta.5.2 至 beta.5.3 的线上更新 | Pending | 需待 beta.5.3 更新源发布后抽查 |
+| beta.5.2 至 beta.5.3 的线上更新 | Not verified | 更新抽检未观察到客户端暂存新包；本机到公开更新域名的 TLS 请求失败，不能据此认定更新功能通过或产品缺陷 |
 
 ## 自动验证与安装包
 
-- 自动检查、Debug/Release x64、Core、Windows Fixture、候选发布构建与隔离安装生命周期需以本次最终提交和最终安装包的结果为准。
+- 自动检查、Debug/Release x64、Core 82 项、Windows Fixture、最终发布构建和隔离安装生命周期均已通过；隔离安装包可启动并卸载。
 - 自动测试和构建仅证明对应静态、核心及打包检查，不代替用户报告的界面体验，也不覆盖未测设备专项。
 - 安装包未签名，Windows 可能提示未知发布者。
 
 ## 发布状态
 
 - 目标版本：`0.2.0-beta.5.3`；Git 标签：`v0.2.0-beta.5.3`；GitHub 采用预发布。
-- Beta5.3 正式公开状态、源码提交 SHA、Setup/nupkg 校验值及更新镜像结果将在发布完成后补记。
+- GitHub 预发布：[v0.2.0-beta.5.3](https://github.com/Cheney-0821/Curtain/releases/tag/v0.2.0-beta.5.3)，源码提交 `21c8fe8c4d67829f8ae1b90bd2606e43b9ec7bbf`，标签 `v0.2.0-beta.5.3` 固定在该提交。
+- Setup SHA-256：`6CFA25E8CEEA254DB8C5793FC1DEAA9FCC5E5E1FAE292083448431FECF7315D1`；GitHub 下载资产摘要与本地包一致。R2 版本对象和索引已上传，Cloudflare API 元数据、大小及 ETag 校验通过，历史版本条目保留；本机公网 TLS 握手失败，因此未声称完成匿名公网 HTTP 抽查。
+- beta.5.2 客户端原位升级未验证；公开说明已披露该边界。beta.5.2 仍可从旧版本对象获取，未删除或改写旧标签/包。
 - beta.5.2 与更早版本的 Tag、Release 和 R2 版本对象保持不变。

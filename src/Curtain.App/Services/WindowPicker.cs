@@ -22,10 +22,12 @@ internal sealed class WindowPicker : IDisposable
     private DateTime _until;
     private LocalizationMessage? _lastPreview;
     private bool _f8Down;
+    private bool _handoffPending;
     private int _generation;
     public bool IsActive { get; private set; }
     public event Action<LocalizationMessage>? PreviewChanged;
-    public event Action<nint, LocalizationMessage>? Finished;
+    public event Func<nint, LocalizationMessage, CurtainSession?>? Finished;
+    public event Action? HandoffCompleted;
     internal WindowPicker(CurtainManager manager, DispatcherQueue dispatcher, nint management)
     {
         _manager = manager; _dispatcher = dispatcher; _management = management;
@@ -132,14 +134,59 @@ internal sealed class WindowPicker : IDisposable
     private void Stop(nint selected, string key)
     {
         bool wasActive = IsActive;
-        IsActive = false; ++_generation; _timer.Stop();
+        ++_generation; _timer.Stop();
         _hook?.Dispose(); _hook = null;
+        _candidate = null; _lastPreview = null;
+
+        // Confirmation is a handoff, unlike cancellation. Keep the selection
+        // visuals until the new protected HWND has been attached and shown.
+        bool handoff = wasActive && selected != nint.Zero;
+        IsActive = handoff;
+
+        if (!handoff) ReleaseSelectionVisuals();
+        DevelopmentDiagnostics.Write("picker-ended", new { selected = selected.ToInt64() });
+        bool deferVisualRelease = false;
+        try
+        {
+            CurtainSession? session = wasActive ? Finished?.Invoke(selected, LocalizationMessage.Create(key)) : null;
+            if (handoff && session is not null)
+            {
+                _handoffPending = true;
+                deferVisualRelease = session.WaitForFirstFrame(OnHandoffFramePresented);
+                if (!deferVisualRelease) _handoffPending = false;
+            }
+        }
+        finally
+        {
+            if (handoff && !deferVisualRelease) CompleteHandoff();
+            else if (!handoff) IsActive = false;
+        }
+    }
+
+    private void OnHandoffFramePresented()
+    {
+        if (!_handoffPending) return;
+        _handoffPending = false;
+        CompleteHandoff();
+    }
+
+    private void CompleteHandoff()
+    {
+        _handoffPending = false;
+        IsActive = false;
+        ReleaseSelectionVisuals();
+        HandoffCompleted?.Invoke();
+    }
+
+    private void ReleaseSelectionVisuals()
+    {
         _outline?.Dispose(); _outline = null;
         _spotlight?.Dispose(); _spotlight = null;
-        _candidate = null; _lastPreview = null;
-        DevelopmentDiagnostics.Write("picker-ended", new { selected = selected.ToInt64() });
-        if (wasActive) Finished?.Invoke(selected, LocalizationMessage.Create(key));
     }
     public void Dispose()
-    { Stop(0, "PickerSelectionEnded"); _timer.Tick -= OnTick; }
+    {
+        if (_handoffPending) CompleteHandoff();
+        else Stop(0, "PickerSelectionEnded");
+        _timer.Tick -= OnTick;
+    }
 }

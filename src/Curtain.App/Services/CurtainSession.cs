@@ -30,6 +30,7 @@ internal sealed class CurtainSession : IDisposable
     public bool IsDestroyed => _disposed || _hooks?.IsDestroyed == true;
     public event Action<CurtainSession, string>? Ended;
     public event Action<string>? Notice;
+    internal bool WaitForFirstFrame(Action callback) => _curtain?.WaitForFirstFrame(callback) == true;
 
     internal CurtainSession(ProtectedTarget target, DispatcherQueue dispatcher)
     {
@@ -56,7 +57,7 @@ internal sealed class CurtainSession : IDisposable
                 pinOwner = NativeMethods.GetWindow(_pin.Handle, NativeMethods.GW_OWNER).ToInt64() });
             _hooks = new WindowHooks(dispatcher, Handle, RefreshSafely);
             if (!IsCurrent()) throw new InvalidOperationException("目标已经关闭。");
-            Refresh();
+            Refresh(animateVisibilityChange: true);
             if (IsDestroyed) throw new InvalidOperationException("目标已经关闭。");
         }
         catch { Dispose(); throw; }

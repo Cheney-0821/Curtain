@@ -23,6 +23,10 @@ internal sealed class CurtainWindow : Window
     private bool? _lastMaximized;
     private bool _disposed;
     private Microsoft.UI.Xaml.Input.Pointer? _pointer;
+    private WindowMessageHost? _messageHost;
+    private bool _firstPaintQueued;
+    private bool _firstFramePresented;
+    private Action? _firstFrameCallback;
     public nint Handle { get; }
     public bool HasSurfaceCapture => _pointer is not null;
     public event Action<PixelPoint>? SurfacePressed;
@@ -40,6 +44,8 @@ internal sealed class CurtainWindow : Window
         Content = _surface;
         Handle = WindowNative.GetWindowHandle(this);
         NativeMethods.RemoveWindowChrome(Handle);
+        _messageHost = new WindowMessageHost(Handle);
+        _messageHost.AfterMessage += OnMessageAfterDefault;
         if (InitializeBackdrop()) _surface.Background = new SolidColorBrush(Colors.Transparent);
         _fade = new OverlayOpacityFade(Handle, DispatcherQueue);
         Closed += (_, _) => ReleaseResources();
@@ -50,6 +56,13 @@ internal sealed class CurtainWindow : Window
         if (_disposed) return;
         _disposed = true;
         ReleaseSurfaceCapture();
+        if (_messageHost is not null)
+        {
+            _messageHost.AfterMessage -= OnMessageAfterDefault;
+            _messageHost.Dispose();
+            _messageHost = null;
+        }
+        NotifyFirstFramePresented();
         _fade?.Dispose(); _fade = null;
         _acrylic?.Dispose(); _acrylic = null;
         _backdropConfiguration = null;
@@ -107,6 +120,50 @@ internal sealed class CurtainWindow : Window
     }
 
     internal void CancelAndHide() => _fade?.CancelAndHide();
+
+    internal bool WaitForFirstFrame(Action callback)
+    {
+        ArgumentNullException.ThrowIfNull(callback);
+        if (_disposed || _firstFramePresented) return false;
+        _firstFrameCallback += callback;
+        return true;
+    }
+
+    private void OnMessageAfterDefault(uint message, nint wParam, nint lParam)
+    {
+        const uint WmPaint = 0x000F;
+        if (message != WmPaint || _firstPaintQueued || _disposed || !NativeMethods.IsWindowVisible(Handle)) return;
+        _firstPaintQueued = true;
+        if (!DispatcherQueue.TryEnqueue(CompleteFirstPaint)) _firstPaintQueued = false;
+    }
+
+    private void CompleteFirstPaint()
+    {
+        if (_disposed)
+        {
+            NotifyFirstFramePresented();
+            return;
+        }
+        if (!NativeMethods.IsWindowVisible(Handle))
+        {
+            _firstPaintQueued = false;
+            return;
+        }
+        NotifyFirstFramePresented();
+    }
+
+    private void NotifyFirstFramePresented()
+    {
+        if (_firstFramePresented) return;
+        _firstFramePresented = true;
+        Action? callback = _firstFrameCallback;
+        _firstFrameCallback = null;
+        try { callback?.Invoke(); }
+        catch (Exception ex)
+        {
+            DevelopmentDiagnostics.Write("overlay-first-paint-callback-error", new { exception = ex.GetType().Name, ex.HResult });
+        }
+    }
 
     private static bool SystemEffectsAllowAnimation()
     {

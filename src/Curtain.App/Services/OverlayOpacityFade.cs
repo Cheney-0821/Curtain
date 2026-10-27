@@ -23,6 +23,7 @@ internal sealed class OverlayOpacityFade : IDisposable
     private bool _layeredReady;
     private bool _disposed;
     private bool _running;
+    private bool _awaitingFirstTick;
     private bool _desiredVisible;
     private double _alpha;
     private double _from;
@@ -70,6 +71,7 @@ internal sealed class OverlayOpacityFade : IDisposable
         {
             if (!EnsureLayered()) { Immediate(visible); return; }
             long now = Stopwatch.GetTimestamp();
+            bool startOnTick = visible && !_running && !IsWindowVisible(_hwnd) && batchStart is null;
             // The timer can lag behind input. Sample at the direction change instead of
             // using the previous Tick's stale alpha (especially before the first Tick).
             if (_running) _alpha = SampleAt(now);
@@ -83,6 +85,7 @@ internal sealed class OverlayOpacityFade : IDisposable
             _to = visible ? 255 : 0;
             _durationMs = OverlayFadeCurve.DurationFor(_from, _to);
             _startedAt = batchStart ?? now;
+            _awaitingFirstTick = startOnTick;
             if (visible)
             {
                 // Never expose an alpha-zero HWND, which would pass mouse input through.
@@ -106,7 +109,7 @@ internal sealed class OverlayOpacityFade : IDisposable
 
     internal void CancelAndHide() => Immediate(false);
 
-    private double SampleAt(long now) => OverlayFadeCurve.Sample(_from, _to,
+    private double SampleAt(long now) => _awaitingFirstTick ? _from : OverlayFadeCurve.Sample(_from, _to,
         (now - _startedAt) * 1000.0 / Stopwatch.Frequency, _durationMs);
 
     private void OnTick(DispatcherQueueTimer sender, object args)
@@ -114,6 +117,12 @@ internal sealed class OverlayOpacityFade : IDisposable
         if (_disposed || !IsOwnedWindow()) { Stop(); return; }
         if (!_running) return;
         long now = Stopwatch.GetTimestamp();
+        if (_awaitingFirstTick)
+        {
+            // Do not consume the opening ramp while the UI thread is showing a new HWND.
+            _startedAt = now;
+            _awaitingFirstTick = false;
+        }
         _alpha = SampleAt(now);
         if (!_desiredVisible && OverlayFadeCurve.NearlyTransparent(_alpha))
         {
@@ -215,6 +224,7 @@ internal sealed class OverlayOpacityFade : IDisposable
     private void Stop()
     {
         _running = false;
+        _awaitingFirstTick = false;
         _timer.Stop();
     }
 

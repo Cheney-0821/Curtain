@@ -66,6 +66,7 @@ public sealed partial class MainWindow : Window
         _picker = new(_manager, DispatcherQueue, handle);
         _picker.PreviewChanged += OnPickerPreviewChanged;
         _picker.Finished += OnPickFinished;
+        _picker.HandoffCompleted += OnPickerHandoffCompleted;
 
         _messageHost = new(handle);
         _messageHost.Message += OnWindowMessage;
@@ -317,23 +318,29 @@ public sealed partial class MainWindow : Window
         catch (Exception) { OnNotice("UnableStartPicker"); }
     }
 
-    private void OnPickFinished(nint target, LocalizationMessage message)
+    private CurtainSession? OnPickFinished(nint target, LocalizationMessage message)
     {
         PickButton.IsEnabled = true;
         Localized.SetContent(PickButton, "AddWindowButton");
         Localized.SetText(CandidateText, message.Key, message.Arguments);
+        CurtainSession? session = null;
         if (target != nint.Zero)
         {
             try
             {
-                WindowList.SelectedItem = _manager.Attach(target);
+                var item = _manager.Attach(target);
+                WindowList.SelectedItem = item;
                 OnNotice("WindowAdded");
+                session = item.Session;
             }
             catch (InvalidOperationException) { OnNotice("WindowNotSelectable"); }
             catch (Exception) { OnNotice("WindowNotAdded"); }
         }
         UpdateSummary();
+        return session;
     }
+
+    private void OnPickerHandoffCompleted() => UpdateSummary();
 
     private void UpdateSummary()
     {
@@ -821,6 +828,7 @@ public sealed partial class MainWindow : Window
         // A running download observes cancellation; don't dispose the CTS mid-await.
         AppWindow.Closing -= OnWindowClosing;
         _picker.Finished -= OnPickFinished;
+        _picker.HandoffCompleted -= OnPickerHandoffCompleted;
         _picker.Dispose();
         _hotkey.Pressed -= StartPickerFromHotkey;
         _hotkey.Dispose();

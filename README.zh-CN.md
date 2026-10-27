@@ -13,10 +13,10 @@
   <img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-0078D4?style=flat-square" />
   <img alt="WinUI 3" src="https://img.shields.io/badge/WinUI-3-536DFE?style=flat-square" />
   <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-6A4C93?style=flat-square" />
-  <img alt="Beta 0.2.0-beta.5.2" src="https://img.shields.io/badge/release-beta.5.2-64748b?style=flat-square" />
+  <img alt="Beta 0.2.0-beta.5.3" src="https://img.shields.io/badge/release-beta.5.3-64748b?style=flat-square" />
 </p>
 
-**[下载 Windows 测试版](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.2.0-beta.5.2-Setup.exe)** · **[GitHub 发布页](https://github.com/Cheney-0821/Curtain/releases/tag/v0.2.0-beta.5.2)** · **[English](README.md)**
+**[下载 Windows 测试版](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.2.0-beta.5.3-Setup.exe)** · **[GitHub 发布页](https://github.com/Cheney-0821/Curtain/releases/tag/v0.2.0-beta.5.3)** · **[English](README.md)**
 
 <sub>Windows x64 · 安装包尚未进行代码签名 · 已在 Windows 11 测试</sub>
 
@@ -80,7 +80,7 @@ Curtain 可以根据键盘、鼠标的无操作时长自动开启保护。**什�
 
 ## 安装与使用
 
-1. 从上方下载 [Windows x64 测试版安装程序](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.2.0-beta.5.2-Setup.exe)。安装包目前**未签名**，Windows 可能提示未知发布者；请核实来源，不要为了安装关闭系统安全防护。
+1. 从上方下载 [Windows x64 测试版安装程序](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.2.0-beta.5.3-Setup.exe)。安装包目前**未签名**，Windows 可能提示未知发布者；请核实来源，不要为了安装关闭系统安全防护。
 2. 启动 Curtain，选择「添加窗口」或「保护整个屏幕」。
 3. 如需离开工位后自动保护，在「设置」中开启空闲自动保护并选择时长及范围。
 
@@ -106,7 +106,7 @@ Curtain 是一种**视觉隐私遮罩**，并非 Windows 系统锁屏、安全�
 
 Curtain 源码已在 GitHub 公开，并采用 **GPL-3.0-only** 许可证。欢迎通过 [GitHub Issues](https://github.com/Cheney-0821/Curtain/issues) 报告问题或提出改进建议。
 
-当前测试版安装包与应用内更新源由上方官方更新域名提供。请查看 [GitHub 发布页](https://github.com/Cheney-0821/Curtain/releases/tag/v0.2.0-beta.5.2) 获取版本说明、源码提交 SHA、安装包 SHA-256，以及 GitHub 镜像下载。
+当前测试版安装包与应用内更新源由上方官方更新域名提供。请查看 [GitHub 发布页](https://github.com/Cheney-0821/Curtain/releases/tag/v0.2.0-beta.5.3) 获取版本说明、源码提交 SHA、安装包 SHA-256，以及 GitHub 镜像下载。
 
 ## 许可
 

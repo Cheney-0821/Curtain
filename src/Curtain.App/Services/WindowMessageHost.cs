@@ -11,6 +11,7 @@ internal sealed class WindowMessageHost : IDisposable
     private bool _disposed;
 
     internal event Action<uint, nint, nint>? Message;
+    internal event Action<uint, nint, nint>? AfterMessage;
 
     internal WindowMessageHost(nint handle)
     {
@@ -24,7 +25,10 @@ internal sealed class WindowMessageHost : IDisposable
     {
         try { Message?.Invoke(message, wParam, lParam); }
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Curtain window message: {ex}"); }
-        return NativeMethods.DefSubclassProc(hwnd, message, wParam, lParam);
+        nint result = NativeMethods.DefSubclassProc(hwnd, message, wParam, lParam);
+        try { AfterMessage?.Invoke(message, wParam, lParam); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Curtain after-window message: {ex}"); }
+        return result;
     }
 
     public void Dispose()
@@ -32,6 +36,7 @@ internal sealed class WindowMessageHost : IDisposable
         if (_disposed) return;
         _disposed = true;
         Message = null;
+        AfterMessage = null;
         NativeMethods.RemoveWindowSubclass(_handle, _procedure, SubclassId);
     }
 }

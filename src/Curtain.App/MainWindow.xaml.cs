@@ -21,7 +21,12 @@ public sealed partial class MainWindow : Window
     private const int PrivacyHotkeyId = 0x4353;
     private bool _privacyHotkeyRegistered;
     private readonly WindowPicker _picker;
+#if DEBUG
+    private readonly CurtainUserSettingsStore _settingsStore = new(
+        Environment.GetEnvironmentVariable("CURTAIN_TEST_SETTINGS_DIR"));
+#else
     private readonly CurtainUserSettingsStore _settingsStore = new();
+#endif
     private readonly WindowMessageHost _messageHost;
     private readonly GlobalHotkey _hotkey;
     private readonly TrayIcon _tray;
@@ -48,7 +53,7 @@ public sealed partial class MainWindow : Window
         if (File.Exists(iconPath)) AppWindow.SetIcon(iconPath);
         UpdateAppVersion();
         SystemBackdrop = new MicaBackdrop();
-        AppWindow.Resize(new global::Windows.Graphics.SizeInt32(860, 760));
+        AppWindow.Resize(new global::Windows.Graphics.SizeInt32(700, 600));
 
         _backgroundUpdates = new BackgroundUpdateService(_updateService);
         _autoUpdateTimer = DispatcherQueue.CreateTimer();
@@ -56,7 +61,7 @@ public sealed partial class MainWindow : Window
         _autoUpdateTimer.Tick += OnAutoUpdateTimer;
 
         _manager = new(DispatcherQueue);
-        _screenPrivacy = new();
+        _screenPrivacy = new(DispatcherQueue);
         _screenPrivacy.ResumeRequested += OnResumeScreenRequested;
         WindowList.ItemsSource = _manager.Windows;
         _manager.CollectionChanged += UpdateSummary;
@@ -138,8 +143,19 @@ public sealed partial class MainWindow : Window
         { OnPrivacyHotkey(); return; }
         if (_hotkey.HandleMessage(message, wParam)) return;
         if (_tray.HandleMessage(message, wParam, lParam)) return;
-        if (message == NativeMethods.WM_SIZE && unchecked((uint)wParam.ToInt64()) == NativeMethods.SIZE_MINIMIZED)
-            AppWindow.Hide();
+    }
+
+    private void OnSettingsRowSizeChanged(object sender, SizeChangedEventArgs args)
+    {
+        if (sender is not Grid row || row.Children.Count != 2) return;
+        bool stacked = args.NewSize.Width < 440;
+        var control = (FrameworkElement)row.Children[1];
+        Grid.SetColumn(control, stacked ? 0 : 1);
+        Grid.SetRow(control, stacked ? 1 : 0);
+        control.HorizontalAlignment = stacked ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+        control.Margin = stacked ? new Thickness(0, 10, 0, 0) : new Thickness(0);
+        if (control is StackPanel keys)
+            keys.Orientation = args.NewSize.Width < 340 ? Orientation.Vertical : Orientation.Horizontal;
     }
 
     private void OnNavigationSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
@@ -188,20 +204,28 @@ public sealed partial class MainWindow : Window
         Localized.SetText(SettingsTitleText, "SettingsTitle");
         Localized.SetText(GeneralTitleText, "GeneralTitle");
         Localized.SetText(GeneralDescriptionText, "GeneralDescription");
-        Localized.SetHeader(StartupSwitch, "StartupHeader");
-        Localized.SetHeader(AutoUpdateSwitch, "AutoUpdateHeader");
-        Localized.SetHeader(LanguageCombo, "LanguageHeader");
+        Localized.SetText(StartupLabelText, "StartupHeader");
+        Localized.SetAutomationName(StartupSwitch, "StartupHeader");
+        Localized.SetText(AutoUpdateLabelText, "AutoUpdateHeader");
+        Localized.SetAutomationName(AutoUpdateSwitch, "AutoUpdateHeader");
+        Localized.SetText(LanguageLabelText, "LanguageHeader");
+        Localized.SetAutomationName(LanguageCombo, "LanguageHeader");
         SetComboItemContent(LanguageCombo, "LanguageSystem", "LanguageEnglish", "LanguageChinese");
         Localized.SetText(AutoProtectionTitleText, "AutoProtectionTitle");
         Localized.SetText(AutoProtectionDescriptionText, "AutoProtectionDescription");
-        Localized.SetHeader(IdleProtectSwitch, "EnableIdleProtection");
-        Localized.SetHeader(IdleMinutesCombo, "IdleDurationHeader");
+        Localized.SetText(IdleProtectLabelText, "EnableIdleProtection");
+        Localized.SetAutomationName(IdleProtectSwitch, "EnableIdleProtection");
+        Localized.SetText(IdleMinutesLabelText, "IdleDurationHeader");
+        Localized.SetAutomationName(IdleMinutesCombo, "IdleDurationHeader");
         SetComboItemContent(IdleMinutesCombo, "IdleMinute1", "IdleMinute3", "IdleMinute5", "IdleMinute10");
         Localized.SetText(AutoProtectionScopeLabelText, "AutoProtectionScopeLabel");
+        Localized.SetAutomationName(IdleScopeButtons, "AutoProtectionScopeLabel");
         Localized.SetText(AutoProtectionHotkeyHintText, "AutoProtectionHotkeyHint");
         Localized.SetText(HotkeyTitleText, "HotkeyTitle");
-        Localized.SetHeader(HotkeyEnabledSwitch, "EnableHotkeyHeader");
-        Localized.SetHeader(HotkeyKeyCombo, "HotkeyKeyHeader");
+        Localized.SetText(HotkeyEnabledLabelText, "EnableHotkeyHeader");
+        Localized.SetAutomationName(HotkeyEnabledSwitch, "EnableHotkeyHeader");
+        Localized.SetText(HotkeyKeyLabelText, "HotkeyKeyHeader");
+        Localized.SetAutomationName(HotkeyKeyCombo, "HotkeyKeyHeader");
         Localized.SetText(AboutTitleText, "AboutTitle");
         Localized.SetText(AboutDescriptionText, "AboutDescription");
         Localized.SetText(UpdatesTitleText, "UpdatesTitle");

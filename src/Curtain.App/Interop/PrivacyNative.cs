@@ -69,4 +69,25 @@ internal static class PrivacyNative
                 area.Width, area.Height, flags))
             throw new Win32Exception(Marshal.GetLastPInvokeError(), "无法将隐私遮罩覆盖屏幕。");
     }
+
+    internal static nint FindFullScreenOccluder(nint overlay, ScreenRect area)
+    {
+        // Topmost is a group, not a permanent ordering within that group.
+        nint window = NativeMethods.GetWindow(overlay, NativeMethods.GW_HWNDPREV);
+        for (int count = 0; window != 0 && count < 512; count++)
+        {
+            if (NativeMethods.IsWindowVisible(window) && !NativeMethods.IsIconic(window) &&
+                NativeMethods.GetWindowRect(window, out var bounds) &&
+                bounds.Right - bounds.Left > 1 && bounds.Bottom - bounds.Top > 1 &&
+                bounds.Right > area.Left && bounds.Left < area.Left + area.Width &&
+                bounds.Bottom > area.Top && bounds.Top < area.Top + area.Height)
+                return window; // Ignore the shell's invisible-content 1x1 helper HWNDs.
+            window = NativeMethods.GetWindow(window, NativeMethods.GW_HWNDPREV);
+        }
+        return 0;
+    }
+
+    internal static bool RaiseFullScreen(nint overlay) => NativeMethods.SetWindowPos(overlay,
+        (nint)HwndTopmost, 0, 0, 0, 0, NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE |
+        NativeMethods.SWP_NOACTIVATE | 0x0200); // SWP_NOOWNERZORDER; never show a hidden HWND.
 }

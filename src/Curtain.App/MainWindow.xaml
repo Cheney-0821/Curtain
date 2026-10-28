@@ -89,36 +89,74 @@
                                     <StackPanel Spacing="16">
                                         <TextBlock x:Name="GeneralTitleText" FontSize="18" FontWeight="SemiBold" />
                                         <TextBlock x:Name="GeneralDescriptionText" TextWrapping="Wrap" Opacity="0.75" />
-                                        <ToggleSwitch x:Name="StartupSwitch" Toggled="OnStartupToggled" />
-                                        <ToggleSwitch x:Name="AutoUpdateSwitch" Toggled="OnAutoUpdateToggled" />
-                                        <ComboBox x:Name="LanguageCombo" SelectedValuePath="Tag" SelectionChanged="OnLanguageSelectionChanged">
+                                        <Grid ColumnSpacing="24" MinHeight="44" SizeChanged="OnSettingsRowSizeChanged">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                            <TextBlock x:Name="StartupLabelText" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                            <ToggleSwitch x:Name="StartupSwitch" MinWidth="0" Toggled="OnStartupToggled" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right" />
+                                        </Grid>
+                                        <Grid ColumnSpacing="24" MinHeight="44" SizeChanged="OnSettingsRowSizeChanged">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                            <TextBlock x:Name="AutoUpdateLabelText" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                            <ToggleSwitch x:Name="AutoUpdateSwitch" MinWidth="0" Toggled="OnAutoUpdateToggled" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right" />
+                                        </Grid>
+                                        <Grid ColumnSpacing="24" MinHeight="44" SizeChanged="OnSettingsRowSizeChanged">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                            <TextBlock x:Name="LanguageLabelText" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                            <ComboBox x:Name="LanguageCombo" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" MinWidth="136" SelectedValuePath="Tag" SelectionChanged="OnLanguageSelectionChanged">
                                             <ComboBoxItem Tag="System"  />
                                             <ComboBoxItem Tag="en-US"  />
                                             <ComboBoxItem Tag="zh-CN"  />
                                         </ComboBox>
+                                        </Grid>
                                     </StackPanel>
                                 </Border>
                                 <Border CornerRadius="12" Padding="18" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                                     <StackPanel Spacing="14">
                                         <TextBlock x:Name="AutoProtectionTitleText" FontSize="18" FontWeight="SemiBold" />
                                         <TextBlock x:Name="AutoProtectionDescriptionText" Opacity="0.75" TextWrapping="Wrap" />
-                                        <ToggleSwitch x:Name="IdleProtectSwitch" Toggled="OnAutoProtectionChanged" />
-                                        <ComboBox x:Name="IdleMinutesCombo" SelectedValuePath="Tag" SelectionChanged="OnAutoProtectionScopeChanged">
+                                        <Grid ColumnSpacing="24" MinHeight="44" SizeChanged="OnSettingsRowSizeChanged">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                            <TextBlock x:Name="IdleProtectLabelText" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                            <ToggleSwitch x:Name="IdleProtectSwitch" MinWidth="0" Toggled="OnAutoProtectionChanged" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right" />
+                                        </Grid>
+                                        <Grid ColumnSpacing="24" MinHeight="44" SizeChanged="OnSettingsRowSizeChanged">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                            <TextBlock x:Name="IdleMinutesLabelText" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                            <ComboBox x:Name="IdleMinutesCombo" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" MinWidth="136" SelectedValuePath="Tag" SelectionChanged="OnAutoProtectionScopeChanged">
                                             <ComboBoxItem Tag="1"  />
                                             <ComboBoxItem Tag="3"  />
                                             <ComboBoxItem Tag="5"  />
                                             <ComboBoxItem Tag="10"  />
                                         </ComboBox>
-                                        <TextBlock x:Name="AutoProtectionScopeLabelText" FontWeight="SemiBold" />
-                                        <RadioButtons x:Name="IdleScopeButtons" SelectedIndex="0" SelectionChanged="OnAutoProtectionScopeChanged" />
+                                        </Grid>
+                                        <Grid ColumnSpacing="24" MinHeight="44" SizeChanged="OnSettingsRowSizeChanged">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                            <TextBlock x:Name="AutoProtectionScopeLabelText" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                            <RadioButtons x:Name="IdleScopeButtons" Grid.Column="1" MaxColumns="1" HorizontalAlignment="Right" SelectedIndex="0" SelectionChanged="OnAutoProtectionScopeChanged" />
+                                        </Grid>
                                         <TextBlock x:Name="AutoProtectionHotkeyHintText" Opacity="0.68" TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
                                 <Border CornerRadius="12" Padding="18" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                                     <StackPanel Spacing="12">
                                         <TextBlock x:Name="HotkeyTitleText" FontSize="18" FontWeight="SemiBold" />
-                                        <ToggleSwitch x:Name="HotkeyEnabledSwitch" Toggled="OnSettingChanged" />
-                                        <StackPanel Orientation="Horizontal" Spacing="12">
+                                        <Grid ColumnSpacing="24" MinHeight="44" SizeChanged="OnSettingsRowSizeChanged">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                            <TextBlock x:Name="HotkeyEnabledLabelText" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                            <ToggleSwitch x:Name="HotkeyEnabledSwitch" MinWidth="0" Toggled="OnSettingChanged" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right" />
+                                        </Grid>
+                                        <Grid ColumnSpacing="24" MinHeight="44" SizeChanged="OnSettingsRowSizeChanged">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                            <TextBlock x:Name="HotkeyKeyLabelText" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" HorizontalAlignment="Right">
                                             <CheckBox x:Name="ControlModifierCheck" Content="Ctrl" Checked="OnSettingChanged" Unchecked="OnSettingChanged" />
                                             <CheckBox x:Name="ShiftModifierCheck" Content="Shift" Checked="OnSettingChanged" Unchecked="OnSettingChanged" />
                                             <CheckBox x:Name="AltModifierCheck" Content="Alt" Checked="OnSettingChanged" Unchecked="OnSettingChanged" />
@@ -131,6 +169,7 @@
                                                 <ComboBoxItem Content="F11" Tag="122" />
                                             </ComboBox>
                                         </StackPanel>
+                                        </Grid>
                                         <TextBlock x:Name="HotkeyStatusText" TextWrapping="Wrap" Opacity="0.75" />
                                     </StackPanel>
                                 </Border>

@@ -1,8 +1,8 @@
 # Curtain 当前开发与发布状态
 
-更新：2026-11-03。beta.5.5 发布任务进行中。Global-R6 功能和 r4 资源管理器逐窗设置展开器均获用户通过；用户确认功能全部正常。正式 x64 安装器及更新包已在本地生成，接下来完成 main 提交、GitHub/R2 发布与公开下载核验。公开 main 基线为 `aba3ddff10d085c23cd7675f53af274a9d588ed2`；beta.5.4 历史发布记录见下文。
+更新：2026-11-03。Curtain `0.2.0-beta.5.5` 已由用户验收并公开发布。发布源码提交为 `19f1c70535f0177fe3f6368e1f05a17ac1ba7050`，标签 `v0.2.0-beta.5.5` 固定在该提交；GitHub [预发布](https://github.com/Cheney-0821/Curtain/releases/tag/v0.2.0-beta.5.5) 与 R2 更新源均已核验。官网 `/download/` 动态跳转至 beta.5.5 安装器。beta.5.4 历史发布记录见下文。
 
-## 2026-11-02–03 beta.5.5 发布准备
+## 2026-11-02–03 beta.5.5 发布与验收
 
 - 唯一工作区与分支：`D:\Cheney\Codex Project\Curtain` / `main`。保留 Global-R6 已接受的单窗口 Backdrop + Composition + Win2D Gaussian 路线、模糊档位/全局默认/逐窗覆盖和现有全屏 Acrylic 路线。
 - 已对点击穿透 HWND 样式变更加原生刷新及失败回滚；会话与遮罩初始化诊断记录目标 HWND/PID、异常类型与 HResult，不记录窗口标题或内容。
@@ -10,8 +10,15 @@
 - 自动门禁：`scripts/verify.ps1` 退出码 0；Core 103 项通过，Debug/Release x64 与 Release Windows Fixture 构建均为 0 警告、0 错误。`scripts/static-check.py`、`git diff --check` 通过。正式 `dotnet publish` 与 Velopack 包装退出码 0；Setup、full、delta、portable 均已生成。
 - r4 Release 候选位于 `artifacts/B3/review-beta55-20261103-expander-cards-checkbox-r4/`。用户确认资源管理器行展开正常，三个设置卡铺满，“使用全局设置”复选框符合预期，并反馈功能全部正常。r2 闪退和 r3 窄栏布局问题分别记录于 `reports/beta55/EXPANDER-CRASH-FIX-20261103.md`，均已由后续修复解决。
 - 用户验收候选使用独立 `test-settings/`。没有直接启动无隔离设置目录的正式 publish EXE，也未在当前 Windows 用户配置上执行 beta.5.4→5.5 安装升级/卸载；这些项目明确列为 **Not tested**。旧 beta.5.4 安装测试目录保持原样。
+- 用户确认 r4 候选功能全部正常，资源管理器逐窗卡片展开及“使用全局设置”复选框符合预期；该用户验收通过不替代未执行的安装升级/卸载。
+- GitHub 源码提交：`19f1c70535f0177fe3f6368e1f05a17ac1ba7050`；标签 `v0.2.0-beta.5.5` 解引用到同一提交；已正常推送 `origin/main` 与标签。beta.5.4 标签和 Release 未修改。
+- GitHub 预发布：<https://github.com/Cheney-0821/Curtain/releases/tag/v0.2.0-beta.5.5>；上传 Setup、Full、Delta、Velopack feed、`RELEASES` 和 SHA-256 清单。GitHub Setup 回读 SHA-256 与本地产物相同：`352E6620D43A11A3DF7CEB404E3C4D294EE85BAE0773E4CDEA7293B5915FDDDF`。
+- R2 feed：<https://curtain-updates.cheneylab.cn/beta/releases.win.json>，HTTP 200，15 条记录（beta.5.5 两条新包加 beta.5.4 已发布快照中的 13 条历史记录）；feed SHA-256 `BAA21970E9FA90802A1E10B647CFD3189BA07AEF15D508D77CCE227555695435`，Content-Length 5150。15 个 feed 包对象均 HTTP 200 且大小与 feed 一致；新 Setup、Full、Delta 均从公网完整下载并与本地产物 SHA-256 匹配。
+- 发布时发现打包目录内的初始 feed 缺少历史条目；发布前从 beta.5.4 归档快照恢复原有 13 条记录并加入 beta.5.5 后，再次上传并核验最终 feed。旧版本对象未删除或覆盖。
+- 官网 `https://curtain.cheneylab.cn/download/` 返回 HTTP 302，`Location` 指向 `CurtainPrivacy-0.2.0-beta.5.5-Setup.exe`；目标安装器 HTTP 200。官网源码未修改或部署。
+- 安装器未签名；beta.5.4→5.5 安装升级/卸载、Windows 10、RDP、HDR、混合 DPI、热插拔、GPU 设备丢失恢复和长时性能矩阵为 **Not tested**。Win2D NuGet 旧 licenseUrl / `requireLicenseAcceptance` 元数据差异仍是非阻塞跟进项，未声称法律澄清。
 
-beta.5.5 的最终提交、发布链接、资产哈希与 R2 核验将在远端发布完成后补入本节；旧版发布记录保留。
+正式发布产物哈希、完整测试矩阵和证据已收录于本轮交付 ZIP；旧版发布记录保留。
 
 ## 2026-10-28 beta.5.4 发布范围
 

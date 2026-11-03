@@ -37,7 +37,8 @@ The app's current beta update feed is `https://curtain-updates.cheneylab.cn/beta
 3. Upload the generated `releases.win.json` only after the package objects it references are available.
 4. Upload the versioned Setup.exe to the existing public download prefix.
 5. Preserve existing versioned objects. Do not empty or replace the entire `beta/` prefix; the current feed must continue to serve clients on earlier beta versions.
-6. Verify the public index and each referenced object after upload, and confirm the latest entry is the intended version.
+6. Before publishing the index, merge the new package entries with the current public `releases.win.json`. Check that every prior filename, SHA-256, and size is retained; a local packaging manifest may contain only a subset of the channel history.
+7. Verify the public index and each referenced object after upload, and confirm the latest entry is the intended version.
 
 Do not embed R2 credentials in the application or public repository.
 

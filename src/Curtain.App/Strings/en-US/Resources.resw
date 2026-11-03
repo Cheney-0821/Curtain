@@ -4,13 +4,13 @@
     <value>Curtain · Window Privacy</value>
   </data>
   <data name="AppVersion" xml:space="preserve">
-    <value>Window privacy protection · {0}</value>
+    <value>Version {0}</value>
   </data>
   <data name="NavigationHome" xml:space="preserve">
     <value>Windows</value>
   </data>
   <data name="NavigationSettings" xml:space="preserve">
-    <value>Settings</value>
+    <value>General</value>
   </data>
   <data name="NavigationAbout" xml:space="preserve">
     <value>About</value>
@@ -82,10 +82,10 @@
     <value>Switch to the app you want to protect, then press the shortcut.</value>
   </data>
   <data name="SettingsTitle" xml:space="preserve">
-    <value>Settings</value>
+    <value>General</value>
   </data>
   <data name="GeneralTitle" xml:space="preserve">
-    <value>General</value>
+    <value>Startup and language</value>
   </data>
   <data name="GeneralDescription" xml:space="preserve">
     <value>Choose how Curtain starts and which language it uses.</value>
@@ -154,13 +154,13 @@
     <value>Keyboard shortcut</value>
   </data>
   <data name="EnableHotkeyHeader" xml:space="preserve">
-    <value>Enable window-selection shortcut</value>
+    <value>Window picker shortcut</value>
   </data>
   <data name="HotkeyKeyHeader" xml:space="preserve">
     <value>Key</value>
   </data>
   <data name="HotkeyInvalid" xml:space="preserve">
-    <value>Choose F1–F11 and keep at least one modifier to enable the shortcut.</value>
+    <value>Use a modifier with a letter, number, Space, or F1–F11.</value>
   </data>
   <data name="HotkeyDisabled" xml:space="preserve">
     <value>Shortcut is disabled.</value>
@@ -181,10 +181,10 @@
     <value>About Curtain</value>
   </data>
   <data name="AboutDescription" xml:space="preserve">
-    <value>A frosted-glass privacy shield for desktop windows that provides quick protection while you move and resize them.</value>
+    <value>Curtain adds adjustable frosted privacy overlays to Windows apps, with per-window, full-screen, and automatic idle protection.</value>
   </data>
   <data name="UpdatesTitle" xml:space="preserve">
-    <value>Software updates</value>
+    <value>Version and updates</value>
   </data>
   <data name="UpdatesDescription" xml:space="preserve">
     <value>Curtain can check for and download updates automatically. You choose when to install.</value>
@@ -390,4 +390,50 @@
   <data name="WindowHandleFallback" xml:space="preserve">
     <value>Window 0x{0}</value>
   </data>
+  <data name="WorkingProtectionOptions" xml:space="preserve"><value>Window protection settings</value></data>
+  <data name="WorkingProtectionEnabled" xml:space="preserve"><value>Customize frost</value></data>
+  <data name="WorkingFrostOpacity" xml:space="preserve"><value>Frost opacity ({0}%)</value></data>
+  <data name="WorkingPassthrough" xml:space="preserve"><value>Allow click-through</value></data>
+  <data name="WorkingDone" xml:space="preserve"><value>Done</value></data>
+  <data name="WorkingProtectionHint" xml:space="preserve"><value>Applies to this window for this session. Opacity controls the visibility of the frost layer. Idle protection restores full frost and blocks input.</value></data>
+  <data name="WorkingOpacityUnavailable" xml:space="preserve"><value>Frost opacity could not be adjusted. Standard frost protection has been restored.</value></data>
+  <data name="DefaultWindowProtection" xml:space="preserve"><value>Default window protection</value></data>
+  <data name="DefaultWindowProtectionHint" xml:space="preserve"><value>Applies immediately to windows following global settings, including newly added windows.</value></data>
+  <data name="FollowGlobalProtection" xml:space="preserve"><value>Use global settings</value></data>
+  <data name="WindowProtectionOverrideHint" xml:space="preserve"><value>Turn off global settings to customize this window for this session. Idle protection always uses strong blur and blocks input.</value></data>
+  <data name="WindowFollowsGlobal" xml:space="preserve"><value>Window settings · Global</value></data>
+  <data name="WindowUsesCustom" xml:space="preserve"><value>Window settings · Custom</value></data>
+  <data name="BlurFine" xml:space="preserve"><value>Light</value></data>
+  <data name="BlurMedium" xml:space="preserve"><value>Medium</value></data>
+  <data name="BlurHeavy" xml:space="preserve"><value>Strong</value></data>
+  <data name="BlurStrengthValue" xml:space="preserve"><value>Blur strength · {0}</value></data>
+  <data name="BlurStrength" xml:space="preserve"><value>Blur level</value></data>
+  <data name="FineBlurTitle" xml:space="preserve"><value>Fine-tune light blur</value></data>
+  <data name="FineBlurClear" xml:space="preserve"><value>Clearer</value></data>
+  <data name="FineBlurMore" xml:space="preserve"><value>More blurred</value></data>
+  <data name="FineBlurHint" xml:space="preserve"><value>Your light blur preference is saved automatically.</value></data>
+  <data name="AddWindowHint" xml:space="preserve"><value>Protect a selected window or your entire desktop.</value></data>
+  <data name="StartupHint" xml:space="preserve"><value>Start Curtain in the background when you sign in to Windows.</value></data>
+  <data name="LanguageHint" xml:space="preserve"><value>Choose a display language or follow Windows.</value></data>
+  <data name="AutoUpdateHint" xml:space="preserve"><value>Download updates in the background; choose when to install.</value></data>
+  <data name="IdleProtectHint" xml:space="preserve"><value>Automatically cover private content when your computer is idle.</value></data>
+  <data name="IdleMinutesHint" xml:space="preserve"><value>How long to wait without keyboard or mouse activity.</value></data>
+  <data name="IdleScopeHint" xml:space="preserve"><value>Protect added windows or all connected displays.</value></data>
+  <data name="ScreenHotkeyHint" xml:space="preserve"><value>Toggle full-screen protection or end automatic protection.</value></data>
+  <data name="HotkeyHint" xml:space="preserve"><value>Press the shortcut to start picking, then click a window to confirm.</value></data>
+  <data name="ProtectionAutomationTitle" xml:space="preserve"><value>Automatic protection and shortcuts</value></data>
+  <data name="EditHotkey" xml:space="preserve"><value>Edit window picker shortcut</value></data>
+  <data name="HotkeyCaptureHint" xml:space="preserve"><value>Press your new key combination below, then save to apply.</value></data>
+  <data name="SaveHotkey" xml:space="preserve"><value>Save</value></data>
+  <data name="ResetHotkey" xml:space="preserve"><value>Reset</value></data>
+  <data name="CancelHotkey" xml:space="preserve"><value>Cancel</value></data>
+  <data name="FollowGlobalDescription" xml:space="preserve"><value>Turn off to customize this window independently.</value></data>
+  <data name="WebsiteLink" xml:space="preserve"><value>Website</value></data>
+  <data name="BlurStrengthDescription" xml:space="preserve"><value>Keep content readable with light blur, or choose stronger privacy.</value></data>
+  <data name="ClickThroughDescription" xml:space="preserve"><value>Interact directly with the window behind the overlay.</value></data>
+  <data name="PrivacyHotkeyHeader" xml:space="preserve"><value>Full-screen privacy shortcut</value></data>
+  <data name="EditPrivacyHotkey" xml:space="preserve"><value>Edit full-screen privacy shortcut</value></data>
+  <data name="DuplicateHotkeys" xml:space="preserve"><value>Window picking and full-screen protection must use different shortcuts.</value></data>
+  <data name="ProtectedApplication" xml:space="preserve"><value>Application</value></data>
+  <data name="FineTuneBlur" xml:space="preserve"><value>Fine-tune</value></data>
 </root>

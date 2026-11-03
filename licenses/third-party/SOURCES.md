@@ -1,6 +1,6 @@
 # 第三方许可原文来源与 SHA-256
 
-本表为候选目录中 25 份第三方 LICENSE、NOTICE 原文记录其版本固定的上游来源、包内相对路径及当前文件 SHA-256。NuGet 条目链接到精确版本的官方包归档；包内路径用于定位对应文本。Velopack 指向固定 commit 的上游原始 LICENSE。
+本表为候选目录中 32 份第三方 LICENSE、NOTICE 原文记录其版本固定的上游来源、包内相对路径及当前文件 SHA-256。NuGet 条目链接到精确版本的官方包归档；包内路径用于定位对应文本。Velopack 与 Win2D 指向固定 commit 的上游原始 LICENSE。Win2D 的 NuGet 元数据与该上游许可证存在待跟进差异，详见 THIRD-PARTY-NOTICES.md。
 
 | 候选文件 | 上游版本与文件 | 来源 URL | SHA-256 |
 |---|---|---|---|
@@ -29,3 +29,10 @@
 | licenses/third-party/system.numerics.tensors/9.0.0/LICENSE.TXT | System.Numerics.Tensors 9.0.0 (package file LICENSE.TXT) | https://api.nuget.org/v3-flatcontainer/system.numerics.tensors/9.0.0/system.numerics.tensors.9.0.0.nupkg | D7A68596AB69B06F51CA278A6545148E4269A9381C26D597C13DF5D88E08CF5B |
 | licenses/third-party/system.numerics.tensors/9.0.0/THIRD-PARTY-NOTICES.TXT | System.Numerics.Tensors 9.0.0 (package file THIRD-PARTY-NOTICES.TXT) | https://api.nuget.org/v3-flatcontainer/system.numerics.tensors/9.0.0/system.numerics.tensors.9.0.0.nupkg | 40686C6447A7D5B5D3693068E4571B5F483D7ED335AEEE773EF662440DE4C5D5 |
 | licenses/third-party/velopack/1.2.161/LICENSE | Velopack 1.2.161 (repository file LICENSE) | https://raw.githubusercontent.com/velopack/velopack/92d6a1c91716729d449034df5c50307dcce39493/LICENSE | 91845DB83551C877EBBB1118E0FB92E4E527290D23B995C55DCD438B3293943F |
+| licenses/third-party/communitytoolkit.winui.controls.settingscontrols/8.2.251219/License.md | CommunityToolkit.WinUI.Controls.SettingsControls 8.2.251219 (package file License.md) | https://api.nuget.org/v3-flatcontainer/communitytoolkit.winui.controls.settingscontrols/8.2.251219/communitytoolkit.winui.controls.settingscontrols.8.2.251219.nupkg | C12410935503A2C9C4D3D4D14FDFDFF49D0A37AD0046DC761B07867E8D499E97 |
+| licenses/third-party/communitytoolkit.common/8.2.1/License.md | CommunityToolkit.Common 8.2.1 (package file License.md) | https://api.nuget.org/v3-flatcontainer/communitytoolkit.common/8.2.1/communitytoolkit.common.8.2.1.nupkg | 651997EF19DBB9ECB8DD660DBC86444A65AF21F18CFE08DAA69BF201CD5CFDFC |
+| licenses/third-party/communitytoolkit.common/8.2.1/ThirdPartyNotices.txt | CommunityToolkit.Common 8.2.1 (package file ThirdPartyNotices.txt) | https://api.nuget.org/v3-flatcontainer/communitytoolkit.common/8.2.1/communitytoolkit.common.8.2.1.nupkg | 7774F8B0AB66BFB47EC154CE24A2D6D574FEBC44A74D940B8A037D1C56756163 |
+| licenses/third-party/communitytoolkit.winui.extensions/8.2.251219/License.md | CommunityToolkit.WinUI.Extensions 8.2.251219 (package file License.md) | https://api.nuget.org/v3-flatcontainer/communitytoolkit.winui.extensions/8.2.251219/communitytoolkit.winui.extensions.8.2.251219.nupkg | C12410935503A2C9C4D3D4D14FDFDFF49D0A37AD0046DC761B07867E8D499E97 |
+| licenses/third-party/communitytoolkit.winui.helpers/8.2.251219/License.md | CommunityToolkit.WinUI.Helpers 8.2.251219 (package file License.md) | https://api.nuget.org/v3-flatcontainer/communitytoolkit.winui.helpers/8.2.251219/communitytoolkit.winui.helpers.8.2.251219.nupkg | C12410935503A2C9C4D3D4D14FDFDFF49D0A37AD0046DC761B07867E8D499E97 |
+| licenses/third-party/communitytoolkit.winui.triggers/8.2.251219/License.md | CommunityToolkit.WinUI.Triggers 8.2.251219 (package file License.md) | https://api.nuget.org/v3-flatcontainer/communitytoolkit.winui.triggers/8.2.251219/communitytoolkit.winui.triggers.8.2.251219.nupkg | C12410935503A2C9C4D3D4D14FDFDFF49D0A37AD0046DC761B07867E8D499E97 |
+| licenses/third-party/microsoft.graphics.win2d/1.4.0/LICENSE.txt | Win2D 1.4.0 upstream source release preparation commit (LICENSE.txt; not asserted to match the package githash) | https://github.com/microsoft/Win2D/blob/2cd2e846b0b410286a88fa5cddc3bc765de8be0b/LICENSE.txt | C3BA493105FA52657C4C60D9B1680DA7C01B188A8665D7A823C2A187FD259808 |

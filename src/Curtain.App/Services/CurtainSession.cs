@@ -4,6 +4,7 @@ using Curtain.App.Interop;
 using Curtain.App.Windows;
 using Curtain.Core.Geometry;
 using Curtain.Core.Sessions;
+using Curtain.Core.Settings;
 using Microsoft.UI.Dispatching;
 
 namespace Curtain.App.Services;
@@ -20,10 +21,14 @@ internal sealed class CurtainSession : IDisposable
     private bool? _lastAppliedProtectionState;
     private bool _manualClosed = true;
     private bool _idleForcedClosed;
+    private WindowProtectionSettings _defaults;
+    internal WindowProtectionSettings? CustomProtection { get; private set; }
+    internal WindowProtectionSettings EffectiveProtection => WindowBlurScale.Resolve(_defaults, CustomProtection);
     // A temporary per-window choice while this idle-protection cycle remains active.
     // Null means idle protection has not been overridden for this window.
     private bool? _idleUserOverrideClosed;
     private Process? _process;
+    private string _applicationName = string.Empty;
     private nint Handle => (nint)Target.Identity.Handle;
     public ProtectedTarget Target { get; }
     public ProtectedWindowItem Item { get; }
@@ -32,18 +37,21 @@ internal sealed class CurtainSession : IDisposable
     public event Action<string>? Notice;
     internal bool WaitForFirstFrame(Action callback) => _curtain?.WaitForFirstFrame(callback) == true;
 
-    internal CurtainSession(ProtectedTarget target, DispatcherQueue dispatcher)
+    internal CurtainSession(ProtectedTarget target, DispatcherQueue dispatcher, WindowProtectionSettings defaults)
     {
+        _defaults = defaults;
         Target = target;
         Target.SetClosed(true);
-        Item = new(this, NativeMethods.TitleOf(Handle));
+        Item = new(this, Localization.LocalizationService.Get("ProtectedApplication"));
         try
         {
             _process = Process.GetProcessById((int)target.Identity.ProcessId);
             if (_process.StartTime.ToUniversalTime().Ticks != target.Identity.ProcessStartTicks)
                 throw new InvalidOperationException("目标进程已经更换。");
             _ = _process.Handle;
-            _curtain = new CurtainWindow();
+            _applicationName = ReadApplicationName(_process);
+            _curtain = new CurtainWindow(dispatcher, Target.Identity.Handle, Target.Identity.ProcessId);
+            _curtain.RenderFailed += OnRenderFailed;
             _curtain.SurfacePressed += OnPressed;
             _curtain.SurfaceMoved += OnMoved;
             _curtain.SurfaceEnded += CancelGesture;
@@ -60,11 +68,47 @@ internal sealed class CurtainSession : IDisposable
             Refresh(animateVisibilityChange: true);
             if (IsDestroyed) throw new InvalidOperationException("目标已经关闭。");
         }
-        catch { Dispose(); throw; }
+        catch (Exception ex)
+        {
+            DevelopmentDiagnostics.Write("session-create-failed", new
+            {
+                targetWindow = Target.Identity.Handle,
+                targetProcessId = Target.Identity.ProcessId,
+                exception = ex.GetType().Name,
+                ex.HResult
+            });
+            Dispose();
+            throw;
+        }
+    }
+    private void OnRenderFailed() { if (!_disposed) Ended?.Invoke(this, "OverlayErrorWindowRemoved"); }
+    private static string ReadApplicationName(Process process)
+    {
+        try
+        {
+            var version = process.MainModule?.FileVersionInfo;
+            if (!string.IsNullOrWhiteSpace(version?.FileDescription)) return version.FileDescription.Trim();
+            if (!string.IsNullOrWhiteSpace(version?.ProductName)) return version.ProductName.Trim();
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or NotSupportedException)
+        { }
+        return process.ProcessName;
     }
     internal bool OwnsOverlay(nint hwnd) => _curtain?.Handle == hwnd || _pin?.Handle == hwnd;
     private bool IsCurrent() => _process is not null && TargetWindow.Matches(Target.Identity, _process);
     internal void Toggle() => SetClosed(!Target.IsClosed);
+    internal void ConfigureWindowProtection(WindowProtectionSettings? custom)
+    {
+        if (_disposed) return;
+        CustomProtection = custom;
+        CancelGesture();
+        RefreshSafely();
+    }
+    internal void SetProtectionDefaults(WindowProtectionSettings defaults)
+    {
+        _defaults = defaults;
+        if (CustomProtection is null) RefreshSafely();
+    }
     internal void SetIdleForcedClosed(bool active, bool animate = false)
     {
         if (_disposed || _idleForcedClosed == active) return;
@@ -109,8 +153,13 @@ internal sealed class CurtainSession : IDisposable
         try { Refresh(animateVisibilityChange, forceVisibilityUpdate); }
         catch (Exception ex)
         {
-            DevelopmentDiagnostics.Write("session-error", new { target = Target.Identity.Handle,
-                exception = ex.GetType().Name, ex.HResult });
+            DevelopmentDiagnostics.Write("session-error", new
+            {
+                targetWindow = Target.Identity.Handle,
+                targetProcessId = Target.Identity.ProcessId,
+                exception = ex.GetType().Name,
+                ex.HResult
+            });
             Ended?.Invoke(this, "OverlayErrorWindowRemoved");
         }
     }
@@ -125,7 +174,7 @@ internal sealed class CurtainSession : IDisposable
         WindowMetadataDiagnostics.Poll(Handle);
         var bounds = NativeMethods.GetVisibleBounds(Handle);
         Target.SetSuspended(bounds is null);
-        Item.Update(NativeMethods.TitleOf(Handle), Target.IsClosed, Target.IsSuspended);
+        Item.Update(_applicationName, Target.IsClosed, Target.IsSuspended);
         if (bounds is null)
         {
             CancelGesture();
@@ -150,6 +199,7 @@ internal sealed class CurtainSession : IDisposable
         _pin.UpdatePlacement(placement, dpi);
         NativeMethods.PositionAbove(_curtain.Handle, Handle, bounds.Value, showWindow: false);
         _curtain.SetTargetMaximized(NativeMethods.IsZoomed(Handle));
+        _curtain.ConfigureWorkingProtection(_idleForcedClosed ? new WindowProtectionSettings() : EffectiveProtection);
         nint pinAnchor = Target.IsClosed || _curtain.IsVisible ? _curtain.Handle : Handle;
         NativeMethods.PositionAbove(_pin.Handle, pinAnchor, placement.Bounds);
         if (forceVisibilityUpdate || _lastAppliedProtectionState != Target.IsClosed)
@@ -217,6 +267,7 @@ internal sealed class CurtainSession : IDisposable
         if (_pin is not null) { _pin.ToggleRequested -= Toggle; _pin.Close(); _pin = null; }
         if (_curtain is not null)
         {
+            _curtain.RenderFailed -= OnRenderFailed;
             _curtain.SurfacePressed -= OnPressed; _curtain.SurfaceMoved -= OnMoved;
             _curtain.SurfaceEnded -= CancelGesture; _curtain.CancelAndHide(); _curtain.CloseOwnedWindow(); _curtain = null;
         }

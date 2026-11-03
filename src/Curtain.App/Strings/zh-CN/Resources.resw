@@ -4,13 +4,13 @@
     <value>Curtain · 窗口隐私保护</value>
   </data>
   <data name="AppVersion" xml:space="preserve">
-    <value>窗口隐私保护 · {0}</value>
+    <value>版本 {0}</value>
   </data>
   <data name="NavigationHome" xml:space="preserve">
     <value>窗口保护</value>
   </data>
   <data name="NavigationSettings" xml:space="preserve">
-    <value>设置</value>
+    <value>常规</value>
   </data>
   <data name="NavigationAbout" xml:space="preserve">
     <value>关于</value>
@@ -82,10 +82,10 @@
     <value>请先切换到需要保护的应用，再按快捷键添加窗口。</value>
   </data>
   <data name="SettingsTitle" xml:space="preserve">
-    <value>设置</value>
+    <value>常规</value>
   </data>
   <data name="GeneralTitle" xml:space="preserve">
-    <value>常规</value>
+    <value>启动与语言</value>
   </data>
   <data name="GeneralDescription" xml:space="preserve">
     <value>设置 Curtain 的启动方式和显示语言。</value>
@@ -154,13 +154,13 @@
     <value>快捷键</value>
   </data>
   <data name="EnableHotkeyHeader" xml:space="preserve">
-    <value>启用选窗快捷键</value>
+    <value>选窗快捷键</value>
   </data>
   <data name="HotkeyKeyHeader" xml:space="preserve">
     <value>按键</value>
   </data>
   <data name="HotkeyInvalid" xml:space="preserve">
-    <value>启用快捷键时，请选择 F1–F11 并至少保留一个修饰键。</value>
+    <value>请使用修饰键搭配字母、数字、空格或 F1～F11。</value>
   </data>
   <data name="HotkeyDisabled" xml:space="preserve">
     <value>快捷键已关闭。</value>
@@ -181,10 +181,10 @@
     <value>关于 Curtain</value>
   </data>
   <data name="AboutDescription" xml:space="preserve">
-    <value>为桌面应用窗口提供可随窗口移动和缩放的磨砂隐私保护层。</value>
+    <value>Curtain 为 Windows 应用窗口提供可调磨砂隐私遮罩。支持逐窗保护、全屏保护与离位自动保护。</value>
   </data>
   <data name="UpdatesTitle" xml:space="preserve">
-    <value>软件更新</value>
+    <value>版本和更新</value>
   </data>
   <data name="UpdatesDescription" xml:space="preserve">
     <value>可自动检查并下载更新，安装时间由你决定。</value>
@@ -390,4 +390,50 @@
   <data name="WindowHandleFallback" xml:space="preserve">
     <value>窗口 0x{0}</value>
   </data>
+  <data name="WorkingProtectionOptions" xml:space="preserve"><value>磨砂与交互</value></data>
+  <data name="WorkingProtectionEnabled" xml:space="preserve"><value>自定义磨砂</value></data>
+  <data name="WorkingFrostOpacity" xml:space="preserve"><value>磨砂浓淡（{0}%）</value></data>
+  <data name="WorkingPassthrough" xml:space="preserve"><value>允许点击穿透</value></data>
+  <data name="WorkingDone" xml:space="preserve"><value>完成</value></data>
+  <data name="WorkingProtectionHint" xml:space="preserve"><value>仅作用于此窗口，本次会话有效。浓淡控制磨砂层的透明程度。离位自动保护会恢复完整磨砂并阻挡输入。</value></data>
+  <data name="WorkingOpacityUnavailable" xml:space="preserve"><value>当前无法调整磨砂浓淡，已恢复普通磨砂保护。</value></data>
+  <data name="DefaultWindowProtection" xml:space="preserve"><value>默认窗口保护</value></data>
+  <data name="DefaultWindowProtectionHint" xml:space="preserve"><value>所有跟随全局的窗口立即生效，新添加的窗口默认沿用。</value></data>
+  <data name="FollowGlobalProtection" xml:space="preserve"><value>使用全局设置</value></data>
+  <data name="WindowProtectionOverrideHint" xml:space="preserve"><value>关闭“使用全局设置”后单独调整，仅对当前窗口本次会话生效。离位自动保护仍阻挡输入并使用强模糊。</value></data>
+  <data name="WindowFollowsGlobal" xml:space="preserve"><value>窗口设置 · 跟随全局</value></data>
+  <data name="WindowUsesCustom" xml:space="preserve"><value>窗口设置 · 自定义</value></data>
+  <data name="BlurFine" xml:space="preserve"><value>轻度</value></data>
+  <data name="BlurMedium" xml:space="preserve"><value>中度</value></data>
+  <data name="BlurHeavy" xml:space="preserve"><value>重度</value></data>
+  <data name="BlurStrengthValue" xml:space="preserve"><value>模糊强度 · {0}</value></data>
+  <data name="BlurStrength" xml:space="preserve"><value>模糊程度</value></data>
+  <data name="FineBlurTitle" xml:space="preserve"><value>轻度微调</value></data>
+  <data name="FineBlurClear" xml:space="preserve"><value>更清晰</value></data>
+  <data name="FineBlurMore" xml:space="preserve"><value>更模糊</value></data>
+  <data name="FineBlurHint" xml:space="preserve"><value>轻度效果会自动保存。</value></data>
+  <data name="AddWindowHint" xml:space="preserve"><value>选择单个窗口，或保护整个桌面。</value></data>
+  <data name="StartupHint" xml:space="preserve"><value>登录 Windows 后在后台启动 Curtain。</value></data>
+  <data name="LanguageHint" xml:space="preserve"><value>选择显示语言，也可跟随 Windows。</value></data>
+  <data name="AutoUpdateHint" xml:space="preserve"><value>后台下载更新，安装时间由你决定。</value></data>
+  <data name="IdleProtectHint" xml:space="preserve"><value>电脑闲置时自动遮挡隐私内容。</value></data>
+  <data name="IdleMinutesHint" xml:space="preserve"><value>等待键盘和鼠标无操作的时长。</value></data>
+  <data name="IdleScopeHint" xml:space="preserve"><value>选择窗口保护或所有显示器。</value></data>
+  <data name="ScreenHotkeyHint" xml:space="preserve"><value>切换全屏保护，或结束自动保护。</value></data>
+  <data name="HotkeyHint" xml:space="preserve"><value>按下组合键进入选窗，单击目标确认。</value></data>
+  <data name="ProtectionAutomationTitle" xml:space="preserve"><value>自动保护与快捷键</value></data>
+  <data name="EditHotkey" xml:space="preserve"><value>编辑选窗快捷键</value></data>
+  <data name="HotkeyCaptureHint" xml:space="preserve"><value>在下方按下新的组合键，保存后生效。</value></data>
+  <data name="SaveHotkey" xml:space="preserve"><value>保存</value></data>
+  <data name="ResetHotkey" xml:space="preserve"><value>重置</value></data>
+  <data name="CancelHotkey" xml:space="preserve"><value>取消</value></data>
+  <data name="FollowGlobalDescription" xml:space="preserve"><value>关闭后仅为此窗口单独设置。</value></data>
+  <data name="WebsiteLink" xml:space="preserve"><value>官方网站</value></data>
+  <data name="BlurStrengthDescription" xml:space="preserve"><value>轻度保留可读性，重度加强遮挡。</value></data>
+  <data name="ClickThroughDescription" xml:space="preserve"><value>直接操作遮罩后的窗口。</value></data>
+  <data name="PrivacyHotkeyHeader" xml:space="preserve"><value>全屏保护快捷键</value></data>
+  <data name="EditPrivacyHotkey" xml:space="preserve"><value>编辑全屏保护快捷键</value></data>
+  <data name="DuplicateHotkeys" xml:space="preserve"><value>选窗与全屏保护不能使用相同的快捷键。</value></data>
+  <data name="ProtectedApplication" xml:space="preserve"><value>应用</value></data>
+  <data name="FineTuneBlur" xml:space="preserve"><value>微调</value></data>
 </root>

@@ -1,2 +1,3 @@
 LICENSE -text
-licenses/third-party/** -text
+licenses/third-party/** -text whitespace=cr-at-eol
+licenses/third-party/microsoft.graphics.win2d/1.4.0/LICENSE.txt whitespace=-blank-at-eol

@@ -41,6 +41,20 @@ var downgrade = release with { AssetUrl = "http://updates.example.com/payload.ex
 Check(downgrade.Validate("updates.example.com").Count > 0, "non-HTTPS rejected");
 var badhash = release with { Sha256 = "bad" };
 Check(badhash.Validate("updates.example.com").Count > 0, "malformed hash rejected");
+bool defaultOpacityUnchanged = Enumerable.Range(0, 256).All(alpha =>
+    OverlayFadeCurve.VisibleAlpha(alpha, 1) == (byte)Math.Clamp(alpha, 1, 255));
+Check(defaultOpacityUnchanged, "full frost preserves every existing visible alpha value");
+Check(OverlayFadeCurve.VisibleAlpha(255, 0.75) == 191 &&
+      OverlayFadeCurve.VisibleAlpha(255, 0.5) == 128 &&
+      OverlayFadeCurve.VisibleAlpha(255, 0) == 1,
+    "frost opacity scales visible coverage while retaining nonzero input-blocking alpha");
+Check(OverlayFadeCurve.VisibleAlpha(0, 0.75) == 1 &&
+      OverlayFadeCurve.VisibleAlpha(255, 0.75) == 191,
+    "custom opacity keeps a nonzero first frame and the configured endpoint");
+Check(OverlayFadeCurve.VisibleAlpha(OverlayFadeCurve.Sample(0, 255, 90, 180), 0.5) == 64 &&
+      OverlayFadeCurve.VisibleAlpha(OverlayFadeCurve.Sample(255, 0, 90, 180), 0.5) == 64,
+    "custom frost uses the same opacity on matching reveal and cover fade phases");
+
 // Pure curve checks cover pre-first-Tick reversals without claiming HWND/UI validation.
 Check(OverlayFadeCurve.DurationFor(0, 255) == 180.0 &&
       OverlayFadeCurve.Sample(0, 255, 0, 180) == 0 &&
@@ -208,8 +222,8 @@ try
     Check(CurtainUserSettingsStore.IsValidHotkey(defaults.Settings.Hotkey), "default global hotkey is valid");
     Check(!CurtainUserSettingsStore.IsValidHotkey(new GlobalHotkeySettings(true, 0, 0x78)),
         "global hotkey requires a modifier and a supported key");
-    Check(!CurtainUserSettingsStore.IsValidHotkey(new GlobalHotkeySettings(true, HotkeyModifier.Windows, 0x78)),
-        "global hotkey rejects the Windows key modifier");
+    Check(CurtainUserSettingsStore.IsValidHotkey(new GlobalHotkeySettings(true, HotkeyModifier.Windows, 0x78)),
+        "global hotkey supports the Windows key modifier");
     var settings = defaults.Settings with
     {
         StartWithWindows = true,
@@ -267,10 +281,58 @@ try
     var custom = new CurtainUserSettings { AutoProtection = new AutoProtectionSettings(true, 5, AutoProtectionScope.AllDisplays) };
     b38Store.Save(custom);
     Check(b38Store.Load().Settings.AutoProtection == custom.AutoProtection, "idle protection preferences roundtrip");
+    b38Store.Save(custom with { WindowProtection = new WindowProtectionSettings(20, false, 0.87) });
+    Check(b38Store.Load().Settings.WindowProtection.GentleAmount == 0.87,
+        "saved light preference survives settings store while strong is selected");
+    b38Store.Save(custom with { PrivacyHotkey = new GlobalHotkeySettings(true, HotkeyModifier.Alt, 0x42) });
+    Check(b38Store.Load().Settings.PrivacyHotkey.VirtualKey == 0x42,
+        "privacy shortcut persists through the actual settings store");
+    try { b38Store.Save(custom with { PrivacyHotkey = custom.Hotkey });
+        throw new Exception("FAIL: duplicate shortcuts accepted"); }
+    catch (ArgumentException) { Check(true, "settings store rejects duplicate picker and privacy shortcuts"); }
+
     try { b38Store.Save(custom with { AutoProtection = new AutoProtectionSettings(true, -1, AutoProtectionScope.AllDisplays) });
         throw new Exception("FAIL: invalid idle minutes"); }
     catch (ArgumentException) { Check(true, "invalid idle period rejected"); }
 }
 finally { if (Directory.Exists(b38Directory)) Directory.Delete(b38Directory, true); }
 
+// The three-node selector has a saved light preference and two fixed stronger levels.
+var lightPreference = WindowBlurScale.Normalize(new WindowProtectionSettings(1.37));
+Check(lightPreference.BlurAmount == 1.37 && lightPreference.GentleAmount == 1.37,
+    "light selection remembers its fine value");
+var mediumPreference = WindowBlurScale.Normalize(lightPreference with { BlurAmount = 10 });
+var strongPreference = WindowBlurScale.Normalize(mediumPreference with { BlurAmount = 20 });
+Check(mediumPreference.GentleAmount == 1.37 && strongPreference.GentleAmount == 1.37,
+    "medium and strong selections preserve saved light value");
+Check(WindowBlurScale.Normalize(strongPreference with { BlurAmount = strongPreference.GentleAmount }) == lightPreference,
+    "returning to light restores the user's fine preference");
+Check(WindowBlurScale.Normalize(5) == 10 && WindowBlurScale.Normalize(15) == 20,
+    "legacy intermediate blur values migrate to discrete levels");
+Check(WindowBlurScale.Normalize(new WindowProtectionSettings(20, false, double.NaN)).GentleAmount == 1.5,
+    "invalid saved light preference falls back safely");
+var customPreference = new WindowProtectionSettings(10, true, 0.84);
+Check(WindowBlurScale.Resolve(strongPreference, customPreference) == customPreference &&
+    WindowBlurScale.Resolve(strongPreference, null) == strongPreference,
+    "window overrides and restored inheritance retain their own light preferences");
+var profileJson = System.Text.Json.JsonSerializer.Serialize(strongPreference);
+Check(System.Text.Json.JsonSerializer.Deserialize<WindowProtectionSettings>(profileJson) == strongPreference,
+    "light preference survives serialized strong selection");
+Check(WindowBlurScale.Normalize(double.NaN) == 20 && WindowBlurScale.Normalize(-1) == 0,
+    "invalid blur values normalized safely");
+Check(CurtainUserSettingsStore.IsValidHotkey(new GlobalHotkeySettings(true, HotkeyModifier.Windows | HotkeyModifier.Alt, 0x20)),
+    "keyboard editor accepts Windows Alt Space");
+Check(!CurtainUserSettingsStore.IsValidHotkey(new GlobalHotkeySettings(true, HotkeyModifier.Control, 0x7B)),
+    "keyboard editor still excludes debugger-reserved F12");
+var legacyHotkeys = System.Text.Json.JsonSerializer.Deserialize<CurtainUserSettings>("{}");
+Check(legacyHotkeys!.PrivacyHotkey.VirtualKey == 0x79 && legacyHotkeys.PrivacyHotkey.Modifiers == (HotkeyModifier.Control | HotkeyModifier.Shift),
+    "legacy settings retain Ctrl Shift F10 privacy shortcut");
+Check(!CurtainUserSettingsStore.IsSameShortcut(new GlobalHotkeySettings(true, HotkeyModifier.Control, 0x41),
+    new GlobalHotkeySettings(true, HotkeyModifier.Alt, 0x41)), "same key with different modifiers is a distinct shortcut");
+Check(CurtainUserSettingsStore.IsSameShortcut(new GlobalHotkeySettings(false, HotkeyModifier.Control, 0x41),
+    new GlobalHotkeySettings(true, HotkeyModifier.Control, 0x41)), "duplicate shortcut detection is independent of enabled state");
+var dualShortcutJson = System.Text.Json.JsonSerializer.Serialize(new CurtainUserSettings
+    { PrivacyHotkey = new GlobalHotkeySettings(true, HotkeyModifier.Alt | HotkeyModifier.Shift, 0x42) });
+Check(System.Text.Json.JsonSerializer.Deserialize<CurtainUserSettings>(dualShortcutJson)!.PrivacyHotkey.VirtualKey == 0x42,
+    "custom privacy shortcut survives serialization");
 Console.WriteLine($"OK: {passed} assertions passed.");

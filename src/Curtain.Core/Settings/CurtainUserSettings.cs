@@ -61,8 +61,10 @@ public sealed record CurtainUserSettings
     public bool AutoDownloadUpdates { get; init; } = true;
     public GlobalHotkeySettings Hotkey { get; init; } = new();
     public AutoProtectionSettings AutoProtection { get; init; } = new();
+    public GlobalHotkeySettings PrivacyHotkey { get; init; } = new(true, HotkeyModifier.Control | HotkeyModifier.Shift, 0x79);
     public string BlurPreset { get; init; } = OverlayBlurPreset.Standard;
     public string Language { get; init; } = AppLanguage.System;
+    public WindowProtectionSettings WindowProtection { get; init; } = new();
 }
 
 public sealed record CurtainUserSettingsLoad(CurtainUserSettings Settings, bool RecoveredFromInvalidFile);
@@ -109,6 +111,8 @@ public sealed class CurtainUserSettingsStore
 
     private static bool IsValid(CurtainUserSettings settings) =>
         settings.SchemaVersion == 1 && settings.Hotkey is not null && IsValidHotkey(settings.Hotkey) &&
+        settings.PrivacyHotkey is not null && IsValidHotkey(settings.PrivacyHotkey) &&
+        !IsSameShortcut(settings.Hotkey, settings.PrivacyHotkey) &&
         settings.AutoProtection is { } auto &&
         auto.IdleMinutes is 1 or 3 or 5 or 10 &&
         Enum.IsDefined(auto.Scope);
@@ -116,16 +120,20 @@ public sealed class CurtainUserSettingsStore
     private static CurtainUserSettings NormalizeNewSettings(CurtainUserSettings settings) => settings with
     {
         BlurPreset = OverlayBlurPreset.Normalize(settings.BlurPreset),
-        Language = AppLanguage.Normalize(settings.Language)
+        Language = AppLanguage.Normalize(settings.Language),
+        WindowProtection = WindowBlurScale.Normalize(settings.WindowProtection ?? new())
     };
+
+    public static bool IsSameShortcut(GlobalHotkeySettings first, GlobalHotkeySettings second) =>
+        first.Modifiers == second.Modifiers && first.VirtualKey == second.VirtualKey;
 
     public static bool IsValidHotkey(GlobalHotkeySettings hotkey)
     {
-        const uint allowed = HotkeyModifier.Alt | HotkeyModifier.Control | HotkeyModifier.Shift;
+        const uint allowed = HotkeyModifier.Alt | HotkeyModifier.Control | HotkeyModifier.Shift | HotkeyModifier.Windows;
         bool hasModifier = (hotkey.Modifiers & allowed) != 0;
         bool keyIsModifier = hotkey.VirtualKey is 0x10 or 0x11 or 0x12 or 0x5B or 0x5C;
         return hasModifier && (hotkey.Modifiers & ~allowed) == 0 &&
-            (hotkey.VirtualKey is (>= 0x30 and <= 0x5A) or (>= 0x60 and <= 0x7B)) &&
+            (hotkey.VirtualKey == 0x20 || hotkey.VirtualKey is (>= 0x30 and <= 0x5A) or (>= 0x60 and <= 0x7B)) &&
             hotkey.VirtualKey != 0x7B && !keyIsModifier;
     }
 }

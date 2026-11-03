@@ -14,6 +14,10 @@ internal sealed class OverlayOpacityFade : IDisposable
     private const int ExStyleIndex = -20;
     private const int Hide = 0;
     private const int ShowNoActivate = 4;
+    private const uint NoSize = 0x0001;
+    private const uint NoMove = 0x0002;
+    private const uint NoZOrder = 0x0004;
+    private const uint NoActivate = 0x0010;
 
     private readonly nint _hwnd;
     private readonly uint _threadId;
@@ -26,6 +30,7 @@ internal sealed class OverlayOpacityFade : IDisposable
     private bool _awaitingFirstTick;
     private bool _desiredVisible;
     private double _alpha;
+    private double _opacityScale = 1;
     private double _from;
     private double _to;
     private double _durationMs;
@@ -89,7 +94,7 @@ internal sealed class OverlayOpacityFade : IDisposable
             if (visible)
             {
                 // Never expose an alpha-zero HWND, which would pass mouse input through.
-                byte first = (byte)Math.Clamp((int)Math.Round(_alpha), 1, 255);
+                byte first = OverlayFadeCurve.VisibleAlpha(_alpha, _opacityScale);
                 if (!SetLayeredWindowAttributes(_hwnd, 0, first, LayeredAlpha))
                 {
                     Immediate(true);
@@ -108,6 +113,49 @@ internal sealed class OverlayOpacityFade : IDisposable
     }
 
     internal void CancelAndHide() => Immediate(false);
+
+    internal bool SetOpacityScale(double opacityScale)
+    {
+        if (_disposed || !IsOwnedWindow()) return false;
+        EnsureThread();
+        if (!double.IsFinite(opacityScale) || opacityScale < 0 || opacityScale > 1)
+            throw new ArgumentOutOfRangeException(nameof(opacityScale));
+        if (_opacityScale == opacityScale) return true;
+        _opacityScale = opacityScale;
+        if (!EnsureLayered()) { _opacityScale = 1; return false; }
+        double current = _running ? SampleAt(Stopwatch.GetTimestamp()) : _alpha;
+        if (SetLayeredWindowAttributes(_hwnd, 0, OverlayFadeCurve.VisibleAlpha(current, _opacityScale), LayeredAlpha))
+            return true;
+        _opacityScale = 1;
+        Immediate(_desiredVisible);
+        return false;
+    }
+
+    internal void SetPointerPassthrough(bool enabled)
+    {
+        if (_disposed || !IsOwnedWindow()) return;
+        EnsureThread();
+        const long transparent = 0x20;
+        if (enabled && !EnsureLayered()) throw new InvalidOperationException("Layered input unavailable.");
+        long before = GetWindowLongPtr(_hwnd, ExStyleIndex).ToInt64();
+        long desired = enabled ? before | transparent : before & ~transparent;
+        if (before == desired) return;
+        SetLastError(0);
+        SetWindowLongPtr(_hwnd, ExStyleIndex, (nint)desired);
+        if ((GetWindowLongPtr(_hwnd, ExStyleIndex).ToInt64() & transparent) != (desired & transparent))
+            throw new InvalidOperationException("Unable to change overlay input mode.");
+        if (SetWindowPos(_hwnd, 0, 0, 0, 0, 0,
+            NoSize | NoMove | NoZOrder | NoActivate | FrameChanged)) return;
+
+        int error = Marshal.GetLastPInvokeError();
+        long current = GetWindowLongPtr(_hwnd, ExStyleIndex).ToInt64();
+        long restored = enabled ? current & ~transparent : current | transparent;
+        SetLastError(0);
+        SetWindowLongPtr(_hwnd, ExStyleIndex, (nint)restored);
+        SetWindowPos(_hwnd, 0, 0, 0, 0, 0,
+            NoSize | NoMove | NoZOrder | NoActivate | FrameChanged);
+        throw new System.ComponentModel.Win32Exception(error, "Unable to refresh overlay input mode.");
+    }
 
     private double SampleAt(long now) => _awaitingFirstTick ? _from : OverlayFadeCurve.Sample(_from, _to,
         (now - _startedAt) * 1000.0 / Stopwatch.Frequency, _durationMs);
@@ -131,7 +179,7 @@ internal sealed class OverlayOpacityFade : IDisposable
             Immediate(false);
             return;
         }
-        byte value = (byte)Math.Clamp((int)Math.Round(_alpha), 1, 255);
+        byte value = OverlayFadeCurve.VisibleAlpha(_alpha, _opacityScale);
         if (!SetLayeredWindowAttributes(_hwnd, 0, value, LayeredAlpha))
         {
             Debug.WriteLine($"Curtain opacity fade Win32 error: {Marshal.GetLastPInvokeError()}");
@@ -153,7 +201,7 @@ internal sealed class OverlayOpacityFade : IDisposable
         _alpha = visible ? 255 : 0;
         if (visible)
         {
-            if (_layeredReady && !SetLayeredWindowAttributes(_hwnd, 0, 255, LayeredAlpha))
+            if (_layeredReady && !SetLayeredWindowAttributes(_hwnd, 0, OverlayFadeCurve.VisibleAlpha(255, _opacityScale), LayeredAlpha))
                 RestoreLayeredStyle();
             ShowWindow(_hwnd, ShowNoActivate);
         }
@@ -183,7 +231,7 @@ internal sealed class OverlayOpacityFade : IDisposable
             return false;
         }
         if (SetWindowPos(_hwnd, 0, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0004 | 0x0010 | FrameChanged) &&
-            SetLayeredWindowAttributes(_hwnd, 0, 255, LayeredAlpha))
+            SetLayeredWindowAttributes(_hwnd, 0, OverlayFadeCurve.VisibleAlpha(255, _opacityScale), LayeredAlpha))
         {
             _layeredReady = true;
             return true;

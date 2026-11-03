@@ -13,10 +13,10 @@ A lightweight frosted-glass privacy shield for Windows. Cover one window, protec
   <img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-0078D4?style=flat-square" />
   <img alt="WinUI 3" src="https://img.shields.io/badge/WinUI-3-536DFE?style=flat-square" />
   <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-6A4C93?style=flat-square" />
-  <img alt="Beta 0.2.0-beta.5.4" src="https://img.shields.io/badge/release-beta.5.4-64748b?style=flat-square" />
+  <img alt="Beta 0.2.0-beta.5.5" src="https://img.shields.io/badge/release-beta.5.5-64748b?style=flat-square" />
 </p>
 
-**[Download for Windows](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.2.0-beta.5.4-Setup.exe)** · **[GitHub Release](https://github.com/Cheney-0821/Curtain/releases/tag/v0.2.0-beta.5.4)** · **[简体中文](README.zh-CN.md)**
+**[Download for Windows](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.2.0-beta.5.5-Setup.exe)** · **[GitHub Release](https://github.com/Cheney-0821/Curtain/releases/tag/v0.2.0-beta.5.5)** · **[简体中文](README.zh-CN.md)**
 
 <sub>Windows x64 · Unsigned beta · Windows 11 tested</sub>
 
@@ -73,6 +73,8 @@ Curtain can watch for a period of keyboard and mouse inactivity and start protec
 ## Designed to stay out of the way
 
 - **Independent window controls.** Protect multiple chosen windows without blurring everything else.
+- **Adjustable Gaussian blur.** Set a global default, then customize blur strength and click-through for individual windows.
+- **Optional click-through.** Interact with the protected app while its blur overlay remains visible.
 - **A small, responsive handle.** Quick to toggle, attached to the window as it moves or resizes.
 - **Whole-desktop privacy.** Manual full-screen protection, including multi-monitor coverage.
 - **Smart idle behavior.** Temporarily uncover an individual window during an idle-protection session; when the next idle threshold is reached, Curtain protects it again.
@@ -82,7 +84,7 @@ Curtain can watch for a period of keyboard and mouse inactivity and start protec
 
 ## Get started
 
-1. **Download** the [current Windows x64 beta installer](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.2.0-beta.5.4-Setup.exe). This installer is **not code-signed**; Windows may warn that its publisher is unrecognized. Verify the source and do not disable security protections just to install it.
+1. **Download** the [current Windows x64 beta installer](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.2.0-beta.5.5-Setup.exe). This installer is **not code-signed**; Windows may warn that its publisher is unrecognized. Verify the source and do not disable security protections just to install it.
 2. **Launch Curtain** and choose **Add window** or **Protect entire screen**.
 3. **Set your preferences** in Settings if you want Curtain to activate after inactivity.
 
@@ -102,13 +104,13 @@ Curtain targets Windows x64. The project's minimum Windows target is Windows 10 
 
 ## What Curtain is — and isn't
 
-Curtain is a **visual privacy overlay**, not a Windows sign-in lock, a defense against screenshots/recording, or a security boundary. Some notifications or transient popups may briefly appear above the full-screen overlay before its Z-order is recovered. Blur strength is not yet adjustable, and the list of currently protected running windows does not persist after restarting Curtain.
+Curtain is a **visual privacy overlay**, not a Windows sign-in lock, a defense against screenshots/recording, or a security boundary. Some notifications or transient popups may briefly appear above the full-screen overlay before its Z-order is recovered. Gaussian blur strength is adjustable for protected application windows; full-screen protection retains the existing Acrylic material. The list of currently protected running windows does not persist after restarting Curtain.
 
 ## Feedback and open source
 
 Curtain's source code is publicly available under **GPL-3.0-only**. Use [GitHub Issues](https://github.com/Cheney-0821/Curtain/issues) to report bugs or suggest improvements.
 
-The current beta installer and in-app update feed are hosted on the official update domain above. The [GitHub Release](https://github.com/Cheney-0821/Curtain/releases/tag/v0.2.0-beta.5.4) includes release notes, the source commit, the installer SHA-256, and a GitHub-hosted installer mirror.
+The current beta installer and in-app update feed are hosted on the official update domain above. The [GitHub Release](https://github.com/Cheney-0821/Curtain/releases/tag/v0.2.0-beta.5.5) includes release notes, the source commit, the installer SHA-256, and a GitHub-hosted installer mirror.
 
 ## License
 

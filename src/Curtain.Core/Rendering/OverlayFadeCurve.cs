@@ -6,6 +6,10 @@ public static class OverlayFadeCurve
     public const double FullDurationMs = 180.0;
     private const double MaxAlpha = 255.0;
 
+    // Visible alpha must stay nonzero when pointer blocking is requested.
+    public static byte VisibleAlpha(double logicalAlpha, double opacityScale) =>
+        (byte)Math.Clamp((int)Math.Round(logicalAlpha * opacityScale), 1, 255);
+
     // A one-percent-opacity overlay is effectively invisible but may still intercept input.
     public static bool NearlyTransparent(double alpha) => alpha <= 3.0;
 

@@ -1,6 +1,17 @@
 # Curtain 当前开发与发布状态
 
-更新：2026-10-28。`0.2.0-beta.5.4` 已发布为 GitHub Pre-release，Beta Velopack feed 已更新，公开 Setup 下载复核通过。发布源码固定在提交 `fd75c0b6821a137bde4c4e74b62e6117430f9258`，标签 `v0.2.0-beta.5.4` 指向该提交。
+更新：2026-11-03。beta.5.5 发布任务进行中。Global-R6 功能和 r4 资源管理器逐窗设置展开器均获用户通过；用户确认功能全部正常。正式 x64 安装器及更新包已在本地生成，接下来完成 main 提交、GitHub/R2 发布与公开下载核验。公开 main 基线为 `aba3ddff10d085c23cd7675f53af274a9d588ed2`；beta.5.4 历史发布记录见下文。
+
+## 2026-11-02–03 beta.5.5 发布准备
+
+- 唯一工作区与分支：`D:\Cheney\Codex Project\Curtain` / `main`。保留 Global-R6 已接受的单窗口 Backdrop + Composition + Win2D Gaussian 路线、模糊档位/全局默认/逐窗覆盖和现有全屏 Acrylic 路线。
+- 已对点击穿透 HWND 样式变更加原生刷新及失败回滚；会话与遮罩初始化诊断记录目标 HWND/PID、异常类型与 HResult，不记录窗口标题或内容。
+- 新增并核对 Win2D、Windows Community Toolkit 许可证和归属；发行包目录结构改为 `licenses/third-party/...`，保留 32 份第三方 LICENSE/NOTICE 原文和来源哈希。Win2D NuGet 旧 `licenseUrl` / `requireLicenseAcceptance` 元数据差异继续如实作为非阻塞跟进项，未声称已经法律澄清。
+- 自动门禁：`scripts/verify.ps1` 退出码 0；Core 103 项通过，Debug/Release x64 与 Release Windows Fixture 构建均为 0 警告、0 错误。`scripts/static-check.py`、`git diff --check` 通过。正式 `dotnet publish` 与 Velopack 包装退出码 0；Setup、full、delta、portable 均已生成。
+- r4 Release 候选位于 `artifacts/B3/review-beta55-20261103-expander-cards-checkbox-r4/`。用户确认资源管理器行展开正常，三个设置卡铺满，“使用全局设置”复选框符合预期，并反馈功能全部正常。r2 闪退和 r3 窄栏布局问题分别记录于 `reports/beta55/EXPANDER-CRASH-FIX-20261103.md`，均已由后续修复解决。
+- 用户验收候选使用独立 `test-settings/`。没有直接启动无隔离设置目录的正式 publish EXE，也未在当前 Windows 用户配置上执行 beta.5.4→5.5 安装升级/卸载；这些项目明确列为 **Not tested**。旧 beta.5.4 安装测试目录保持原样。
+
+beta.5.5 的最终提交、发布链接、资产哈希与 R2 核验将在远端发布完成后补入本节；旧版发布记录保留。
 
 ## 2026-10-28 beta.5.4 发布范围
 

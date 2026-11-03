@@ -1,6 +1,7 @@
 using Curtain.App.Interop;
 using Curtain.App.Localization;
 using Curtain.App.Services;
+using Curtain.App.Controls;
 using Curtain.Core.Settings;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
@@ -19,9 +20,9 @@ public sealed partial class MainWindow : Window
     private bool _manualScreenActive;
     private AutoProtectionScope? _idleScope;
     private const int PrivacyHotkeyId = 0x4353;
-    private bool _privacyHotkeyRegistered;
+    private readonly GlobalHotkey _privacyHotkey;
     private readonly WindowPicker _picker;
-#if DEBUG
+#if DEBUG || CURTAIN_TEST_SETTINGS
     private readonly CurtainUserSettingsStore _settingsStore = new(
         Environment.GetEnvironmentVariable("CURTAIN_TEST_SETTINGS_DIR"));
 #else
@@ -40,6 +41,8 @@ public sealed partial class MainWindow : Window
     private bool _loadingSettings = true;
     private bool _allowClose;
     private bool _disposed;
+    private WindowProtectionControl? _globalProtection;
+    private DispatcherQueueTimer? _protectionSaveTimer;
 
     public MainWindow()
     {
@@ -66,18 +69,18 @@ public sealed partial class MainWindow : Window
         WindowList.ItemsSource = _manager.Windows;
         _manager.CollectionChanged += UpdateSummary;
         _manager.Notice += OnNotice;
+        InitializeGlobalProtection();
 
         nint handle = WindowNative.GetWindowHandle(this);
-        _picker = new(_manager, DispatcherQueue, handle);
+        _picker = new(_manager, DispatcherQueue);
         _picker.PreviewChanged += OnPickerPreviewChanged;
         _picker.Finished += OnPickFinished;
         _picker.HandoffCompleted += OnPickerHandoffCompleted;
 
         _messageHost = new(handle);
         _messageHost.Message += OnWindowMessage;
-        // Separate id from the configurable window-selection hotkey.
-        _privacyHotkeyRegistered = NativeMethods.RegisterHotKey(handle, PrivacyHotkeyId,
-            HotkeyModifier.Control | HotkeyModifier.Shift | 0x4000, 0x79); // Ctrl+Shift+F10
+        _privacyHotkey = new(handle, PrivacyHotkeyId);
+        _privacyHotkey.Pressed += OnPrivacyHotkey;
         _hotkey = new(handle);
         _hotkey.Pressed += StartPickerFromHotkey;
         _tray = new(handle)
@@ -96,8 +99,10 @@ public sealed partial class MainWindow : Window
         ApplySettingsToControls();
         Localized.RefreshAll();
         RefreshLocalizedOptionControls();
+        _globalProtection?.RefreshLanguage();
         _loadingSettings = false;
         ApplyHotkey();
+        ApplyPrivacyHotkey();
         // Upgrade from a development path to Velopack's stable launcher on first installed start.
         if (_settings.StartWithWindows)
         {
@@ -120,7 +125,7 @@ public sealed partial class MainWindow : Window
             () => { if (_screenPrivacy.HasOverlays) _screenPrivacy.RefreshDisplays(); },
             () => { if (_idleScope == AutoProtectionScope.AddedWindows)
                 _manager.ReapplyIdleForcedClosed(); });
-        if (!_privacyHotkeyRegistered)
+        if (!_privacyHotkey.IsRegistered)
             Localized.SetText(SettingsStatusText, "PrivacyHotkeyUnavailable");
     }
 
@@ -139,23 +144,9 @@ public sealed partial class MainWindow : Window
     {
         if (message == 0x0011) _allowClose = true; // WM_QUERYENDSESSION
         else if (message == 0x0016 && wParam == 0) _allowClose = false; // WM_ENDSESSION cancelled
-        if (message == NativeMethods.WM_HOTKEY && wParam.ToInt32() == PrivacyHotkeyId)
-        { OnPrivacyHotkey(); return; }
+        if (_privacyHotkey.HandleMessage(message, wParam)) return;
         if (_hotkey.HandleMessage(message, wParam)) return;
         if (_tray.HandleMessage(message, wParam, lParam)) return;
-    }
-
-    private void OnSettingsRowSizeChanged(object sender, SizeChangedEventArgs args)
-    {
-        if (sender is not Grid row || row.Children.Count != 2) return;
-        bool stacked = args.NewSize.Width < 440;
-        var control = (FrameworkElement)row.Children[1];
-        Grid.SetColumn(control, stacked ? 0 : 1);
-        Grid.SetRow(control, stacked ? 1 : 0);
-        control.HorizontalAlignment = stacked ? HorizontalAlignment.Left : HorizontalAlignment.Right;
-        control.Margin = stacked ? new Thickness(0, 10, 0, 0) : new Thickness(0);
-        if (control is StackPanel keys)
-            keys.Orientation = args.NewSize.Width < 340 ? Orientation.Vertical : Orientation.Horizontal;
     }
 
     private void OnNavigationSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
@@ -163,13 +154,13 @@ public sealed partial class MainWindow : Window
         string section = (args.SelectedItem as NavigationViewItem)?.Tag as string ?? "home";
         HomePage.Visibility = section == "home" ? Visibility.Visible : Visibility.Collapsed;
         SettingsPage.Visibility = section == "settings" ? Visibility.Visible : Visibility.Collapsed;
-        AboutPage.Visibility = section == "about" ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void OnLanguageChanged()
     {
         if (_disposed) return;
         Localized.RefreshAll();
+        _globalProtection?.RefreshLanguage();
         RefreshLocalizedOptionControls();
         UpdateWindowTitle();
         UpdateAppVersion();
@@ -179,17 +170,15 @@ public sealed partial class MainWindow : Window
         UpdateScreenButtons();
         UpdateSummary();
         UpdateHotkeyStatus();
+        RefreshPrivacyHotkeyStatus();
     }
 
     private void InitializeLocalizedControls()
     {
         Localized.SetContent(HomeItem, "NavigationHome");
         Localized.SetContent(SettingsItem, "NavigationSettings");
-        Localized.SetContent(AboutItem, "NavigationAbout");
         Localized.SetText(HomeTitleText, "HomeTitle");
-        Localized.SetText(HomeDescriptionText, "HomeDescription");
         Localized.SetText(AddWindowTitleText, "AddWindowTitle");
-        Localized.SetText(AddWindowDescriptionText, "AddWindowDescription");
         Localized.SetContent(PickButton, "AddWindowButton");
         Localized.SetAutomationName(PickButton, "AddWindowButton");
         Localized.SetContent(ScreenPrivacyButton, "ProtectScreenButton");
@@ -203,35 +192,28 @@ public sealed partial class MainWindow : Window
         Localized.SetText(StatusText, "Ready");
         Localized.SetText(SettingsTitleText, "SettingsTitle");
         Localized.SetText(GeneralTitleText, "GeneralTitle");
-        Localized.SetText(GeneralDescriptionText, "GeneralDescription");
         Localized.SetText(StartupLabelText, "StartupHeader");
         Localized.SetAutomationName(StartupSwitch, "StartupHeader");
         Localized.SetText(AutoUpdateLabelText, "AutoUpdateHeader");
-        Localized.SetAutomationName(AutoUpdateSwitch, "AutoUpdateHeader");
+        Localized.SetAutomationName(AutoUpdateCheck, "AutoUpdateHeader");
         Localized.SetText(LanguageLabelText, "LanguageHeader");
         Localized.SetAutomationName(LanguageCombo, "LanguageHeader");
         SetComboItemContent(LanguageCombo, "LanguageSystem", "LanguageEnglish", "LanguageChinese");
         Localized.SetText(AutoProtectionTitleText, "AutoProtectionTitle");
-        Localized.SetText(AutoProtectionDescriptionText, "AutoProtectionDescription");
-        Localized.SetText(IdleProtectLabelText, "EnableIdleProtection");
         Localized.SetAutomationName(IdleProtectSwitch, "EnableIdleProtection");
         Localized.SetText(IdleMinutesLabelText, "IdleDurationHeader");
         Localized.SetAutomationName(IdleMinutesCombo, "IdleDurationHeader");
         SetComboItemContent(IdleMinutesCombo, "IdleMinute1", "IdleMinute3", "IdleMinute5", "IdleMinute10");
         Localized.SetText(AutoProtectionScopeLabelText, "AutoProtectionScopeLabel");
-        Localized.SetAutomationName(IdleScopeButtons, "AutoProtectionScopeLabel");
-        Localized.SetText(AutoProtectionHotkeyHintText, "AutoProtectionHotkeyHint");
-        Localized.SetText(HotkeyTitleText, "HotkeyTitle");
+        Localized.SetAutomationName(IdleScopeCombo, "AutoProtectionScopeLabel");
+        Localized.SetText(PrivacyHotkeyLabelText, "PrivacyHotkeyHeader");
         Localized.SetText(HotkeyEnabledLabelText, "EnableHotkeyHeader");
         Localized.SetAutomationName(HotkeyEnabledSwitch, "EnableHotkeyHeader");
-        Localized.SetText(HotkeyKeyLabelText, "HotkeyKeyHeader");
-        Localized.SetAutomationName(HotkeyKeyCombo, "HotkeyKeyHeader");
-        Localized.SetText(AboutTitleText, "AboutTitle");
         Localized.SetText(AboutDescriptionText, "AboutDescription");
         Localized.SetText(UpdatesTitleText, "UpdatesTitle");
-        Localized.SetText(UpdatesDescriptionText, "UpdatesDescription");
         Localized.SetContent(UpdateActionButton, "CheckUpdates");
-        Localized.SetText(UpdateStatusText, "UpdateNotChecked");
+        Localized.SetText(UpdateStatusText, "UpdateLatest");
+        InitializeSettingDescriptions();
     }
 
     private static void SetComboItemContent(ComboBox comboBox, params string[] keys)
@@ -250,8 +232,6 @@ public sealed partial class MainWindow : Window
         string off = LocalizationService.Get("ToggleOff");
         StartupSwitch.OnContent = on;
         StartupSwitch.OffContent = off;
-        AutoUpdateSwitch.OnContent = on;
-        AutoUpdateSwitch.OffContent = off;
         IdleProtectSwitch.OnContent = on;
         IdleProtectSwitch.OffContent = off;
         HotkeyEnabledSwitch.OnContent = on;
@@ -284,7 +264,11 @@ public sealed partial class MainWindow : Window
     private void UpdateAppVersion()
     {
         string version = _updateService.InstalledVersion;
+#if DEBUG
+        version = LocalizationService.Get("DevelopmentBuild");
+#else
         if (version == "开发版") version = LocalizationService.Get("DevelopmentBuild");
+#endif
         Localized.SetText(AppVersionText, "AppVersion", version);
     }
 
@@ -292,27 +276,28 @@ public sealed partial class MainWindow : Window
     {
         bool wasLoading = _loadingSettings;
         _loadingSettings = true;
-        int selected = IdleScopeButtons.SelectedIndex;
-        IdleScopeButtons.ItemsSource = new[]
+        int selected = IdleScopeCombo.SelectedIndex;
+        IdleScopeCombo.ItemsSource = new[]
         {
             LocalizationService.Get("ScopeAddedWindows"),
             LocalizationService.Get("ScopeAllDisplays")
         };
-        IdleScopeButtons.SelectedIndex = selected is 0 or 1 ? selected : 0;
+        IdleScopeCombo.SelectedIndex = selected is 0 or 1 ? selected : 0;
         _loadingSettings = wasLoading;
     }
 
     private void OnPickerPreviewChanged(LocalizationMessage message) =>
         Localized.SetText(CandidateText, message.Key, message.Arguments);
 
-    private void OnPickClick(object sender, RoutedEventArgs e) => StartPicker(WindowNative.GetWindowHandle(this));
+    private void OnPickClick(object sender, RoutedEventArgs e) => StartPicker();
 
-    private void StartPicker(nint expectedForeground)
+    private void StartPicker()
     {
         if (_picker.IsActive) return;
         try
         {
-            _picker.Start(expectedForeground);
+            _picker.Start();
+            CandidateText.Visibility = Visibility.Visible;
             PickButton.IsEnabled = false;
             Localized.SetContent(PickButton, "PickerInProgress");
             UpdateSummary();
@@ -325,25 +310,12 @@ public sealed partial class MainWindow : Window
 
     private void StartPickerFromHotkey()
     {
-        if (_picker.IsActive) return;
-        nint foreground = NativeMethods.GetForegroundWindow();
-        if (foreground == nint.Zero || foreground == WindowNative.GetWindowHandle(this))
-        {
-            OnNotice("SelectAppBeforeHotkey");
-            return;
-        }
-        try
-        {
-            _picker.Start(foreground);
-            PickButton.IsEnabled = false;
-            Localized.SetContent(PickButton, "PickerInProgress");
-            UpdateSummary();
-        }
-        catch (Exception) { OnNotice("UnableStartPicker"); }
+        if (!_editingHotkey) StartPicker();
     }
 
     private CurtainSession? OnPickFinished(nint target, LocalizationMessage message)
     {
+        CandidateText.Visibility = Visibility.Collapsed;
         PickButton.IsEnabled = true;
         Localized.SetContent(PickButton, "AddWindowButton");
         Localized.SetText(CandidateText, message.Key, message.Arguments);
@@ -375,6 +347,7 @@ public sealed partial class MainWindow : Window
         WindowList.IsEnabled = !_picker.IsActive;
         PickButton.IsEnabled = !_picker.IsActive;
         EmptyText.Visibility = hasWindows ? Visibility.Collapsed : Visibility.Visible;
+        WindowList.MinHeight = hasWindows ? 112 : 0;
     }
 
     private void OnNotice(string key) => Localized.SetText(StatusText, key);
@@ -385,6 +358,7 @@ public sealed partial class MainWindow : Window
 
     private void OnPrivacyHotkey()
     {
+        if (_editingHotkey) return;
         if (_idleScope.HasValue) { ResumeAutomaticProtection(); return; }
         ToggleManualScreen();
     }
@@ -452,7 +426,7 @@ public sealed partial class MainWindow : Window
         if (_loadingSettings || IdleMinutesCombo.SelectedValue is null) return;
         int minutes = int.TryParse(IdleMinutesCombo.SelectedValue.ToString(), out var value) ? value : 3;
         var auto = new AutoProtectionSettings(IdleProtectSwitch.IsOn, minutes,
-            IdleScopeButtons.SelectedIndex == 1 ? AutoProtectionScope.AllDisplays : AutoProtectionScope.AddedWindows);
+            IdleScopeCombo.SelectedIndex == 1 ? AutoProtectionScope.AllDisplays : AutoProtectionScope.AddedWindows);
         var old = _settings;
         _settings = _settings with { AutoProtection = auto };
         if (!SaveSettings()) { _settings = old; ApplyAutoProtectionControls(); return; }
@@ -466,14 +440,14 @@ public sealed partial class MainWindow : Window
         IdleProtectSwitch.IsOn = _settings.AutoProtection.Enabled;
         IdleMinutesCombo.SelectedItem = IdleMinutesCombo.Items.OfType<ComboBoxItem>().FirstOrDefault(i =>
             int.TryParse(i.Tag?.ToString(), out int v) && v == _settings.AutoProtection.IdleMinutes);
-        IdleScopeButtons.SelectedIndex = _settings.AutoProtection.Scope == AutoProtectionScope.AllDisplays ? 1 : 0;
+        IdleScopeCombo.SelectedIndex = _settings.AutoProtection.Scope == AutoProtectionScope.AllDisplays ? 1 : 0;
         _loadingSettings = wasLoading;
         UpdateAutoProtectionEnabledControls();
     }
     private void UpdateAutoProtectionEnabledControls()
     {
         IdleMinutesCombo.IsEnabled = IdleProtectSwitch.IsOn;
-        IdleScopeButtons.IsEnabled = IdleProtectSwitch.IsOn;
+        IdleScopeCombo.IsEnabled = IdleProtectSwitch.IsOn;
     }
 
     private void OnProtectAll(object sender, RoutedEventArgs e) => _manager.SetAllClosed(true);
@@ -485,9 +459,66 @@ public sealed partial class MainWindow : Window
         _manager.SetAllClosed(!allEnabled);
     }
 
-    private void OnRowToggle(object sender, RoutedEventArgs e)
+    private void InitializeGlobalProtection()
     {
-        if ((sender as FrameworkElement)?.Tag is ProtectedWindowItem item) item.Session.Toggle();
+        var title = new TextBlock { Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"] };
+        Localized.SetText(title, "DefaultWindowProtection");
+        _manager.SetProtectionDefaults(_settings.WindowProtection);
+        _globalProtection = new WindowProtectionControl(_settings.WindowProtection);
+        _protectionSaveTimer = DispatcherQueue.CreateTimer();
+        _protectionSaveTimer.IsRepeating = false;
+        _protectionSaveTimer.Interval = TimeSpan.FromMilliseconds(300);
+        _protectionSaveTimer.Tick += (_, _) => SaveSettings();
+        _globalProtection.Changed += value =>
+        {
+            _settings = _settings with { WindowProtection = value };
+            _manager.SetProtectionDefaults(value);
+            _protectionSaveTimer.Stop();
+            _protectionSaveTimer.Start();
+        };
+        GlobalProtectionHost.Children.Add(title);
+        GlobalProtectionHost.Children.Add(_globalProtection);
+
+    }
+
+    private void OnWindowSettingsLoaded(object sender, RoutedEventArgs args)
+    {
+        if (sender is not CommunityToolkit.WinUI.Controls.SettingsExpander expander || expander.Tag is not ProtectedWindowItem item) return;
+        var session = item.Session;
+        var follow = new CheckBox { IsChecked = item.UsesGlobal };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(follow, LocalizationService.Get("FollowGlobalProtection"));
+        var followCard = new CommunityToolkit.WinUI.Controls.SettingsCard
+        {
+            Header = LocalizationService.Get("FollowGlobalProtection"),
+            Description = LocalizationService.Get("FollowGlobalDescription"),
+            HeaderIcon = new FontIcon { Glyph = "\uE71B", FontSize = 20 }, Content = follow
+        };
+        var editor = new WindowProtectionControl(item.ProtectionOptions);
+        var editorCards = editor.TakeSettingsCards();
+        editor.SetEditable(follow.IsChecked != true);
+        bool refreshing = false;
+        void Refresh()
+        {
+            refreshing = true;
+            follow.IsChecked = item.UsesGlobal; editor.SetEditable(follow.IsChecked != true); editor.SetSettings(item.ProtectionOptions);
+            refreshing = false;
+        }
+        void ConfigureFollow()
+        {
+            if (refreshing || session.IsDestroyed) return;
+            session.ConfigureWindowProtection(follow.IsChecked == true ? null : editor.Settings); Refresh();
+        }
+        follow.Checked += (_, _) => ConfigureFollow();
+        follow.Unchecked += (_, _) => ConfigureFollow();
+        editor.Changed += value => { if (!refreshing && follow.IsChecked != true) session.ConfigureWindowProtection(value); };
+        System.ComponentModel.PropertyChangedEventHandler changed = (_, e) =>
+        { if (e.PropertyName is nameof(ProtectedWindowItem.ProtectionOptions) or nameof(ProtectedWindowItem.UsesGlobal)) Refresh(); };
+        item.PropertyChanged += changed;
+        RoutedEventHandler? unloaded = null;
+        unloaded = (_, _) => { item.PropertyChanged -= changed; expander.Unloaded -= unloaded; };
+        expander.Unloaded += unloaded;
+        expander.Items.Clear(); expander.Items.Add(followCard);
+        foreach (var card in editorCards) expander.Items.Add(card);
     }
 
     private void OnRowDetach(object sender, RoutedEventArgs e)
@@ -498,12 +529,6 @@ public sealed partial class MainWindow : Window
     }
 
     private void OnSettingChanged(object sender, RoutedEventArgs e)
-    {
-        if (_loadingSettings) return;
-        ReadSettingsAndApply();
-    }
-
-    private void OnHotkeyKeyChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_loadingSettings) return;
         ReadSettingsAndApply();
@@ -529,12 +554,12 @@ public sealed partial class MainWindow : Window
     {
         if (_loadingSettings) return;
         var before = _settings;
-        _settings = _settings with { AutoDownloadUpdates = AutoUpdateSwitch.IsOn };
+        _settings = _settings with { AutoDownloadUpdates = (AutoUpdateCheck.IsChecked == true) };
         if (!SaveSettings())
         {
             _settings = before;
             _loadingSettings = true;
-            AutoUpdateSwitch.IsOn = before.AutoDownloadUpdates;
+            AutoUpdateCheck.IsChecked = before.AutoDownloadUpdates;
             _loadingSettings = false;
             return;
         }
@@ -571,42 +596,17 @@ public sealed partial class MainWindow : Window
 
     private void ReadSettingsAndApply()
     {
-        uint modifiers = 0;
-        if (ControlModifierCheck.IsChecked == true) modifiers |= HotkeyModifier.Control;
-        if (ShiftModifierCheck.IsChecked == true) modifiers |= HotkeyModifier.Shift;
-        if (AltModifierCheck.IsChecked == true) modifiers |= HotkeyModifier.Alt;
-        uint key = 0;
-        if (HotkeyKeyCombo.SelectedValue is not null)
-            uint.TryParse(HotkeyKeyCombo.SelectedValue.ToString(), out key);
-        var hotkey = new GlobalHotkeySettings(HotkeyEnabledSwitch.IsOn, modifiers, key);
-        if (!CurtainUserSettingsStore.IsValidHotkey(hotkey))
-        {
-            if (hotkey.Enabled)
-            {
-                Localized.SetText(HotkeyStatusText, "HotkeyInvalid");
-                return;
-            }
-            hotkey = _settings.Hotkey with { Enabled = false };
-        }
-        _settings = _settings with
-        {
-            Hotkey = hotkey
-        };
-        SaveSettings();
-        ApplyHotkey();
+        _settings = _settings with { Hotkey = _settings.Hotkey with { Enabled = HotkeyEnabledSwitch.IsOn } };
+        SaveSettings(); ApplyHotkey();
     }
 
     private void ApplySettingsToControls()
     {
         StartupSwitch.IsOn = _settings.StartWithWindows;
-        AutoUpdateSwitch.IsOn = _settings.AutoDownloadUpdates;
+        AutoUpdateCheck.IsChecked = _settings.AutoDownloadUpdates;
         ApplyAutoProtectionControls();
         HotkeyEnabledSwitch.IsOn = _settings.Hotkey.Enabled;
-        ControlModifierCheck.IsChecked = (_settings.Hotkey.Modifiers & HotkeyModifier.Control) != 0;
-        ShiftModifierCheck.IsChecked = (_settings.Hotkey.Modifiers & HotkeyModifier.Shift) != 0;
-        AltModifierCheck.IsChecked = (_settings.Hotkey.Modifiers & HotkeyModifier.Alt) != 0;
-        HotkeyKeyCombo.SelectedItem = HotkeyKeyCombo.Items.OfType<ComboBoxItem>().FirstOrDefault(item =>
-            uint.TryParse(item.Tag?.ToString(), out uint key) && key == _settings.Hotkey.VirtualKey);
+        RefreshHotkeyKeycaps();
         LanguageCombo.SelectedValue = _settings.Language;
     }
 
@@ -618,7 +618,9 @@ public sealed partial class MainWindow : Window
 
     private void UpdateHotkeyStatus()
     {
+        RefreshHotkeyKeycaps();
         bool registered = _hotkey.IsRegistered;
+        HotkeyStatusText.Visibility = registered || !_settings.Hotkey.Enabled ? Visibility.Collapsed : Visibility.Visible;
         if (!_settings.Hotkey.Enabled) Localized.SetText(HotkeyStatusText, "HotkeyDisabled");
         else if (registered) Localized.SetText(HotkeyStatusText, "HotkeyCurrent", DescribeHotkey(_settings.Hotkey));
         else if (_hotkey.LastError == NativeMethods.ERROR_HOTKEY_ALREADY_REGISTERED)
@@ -630,10 +632,11 @@ public sealed partial class MainWindow : Window
     private static string DescribeHotkey(GlobalHotkeySettings hotkey)
     {
         var parts = new List<string>();
+        if ((hotkey.Modifiers & HotkeyModifier.Windows) != 0) parts.Add("Win");
         if ((hotkey.Modifiers & HotkeyModifier.Control) != 0) parts.Add("Ctrl");
         if ((hotkey.Modifiers & HotkeyModifier.Shift) != 0) parts.Add("Shift");
         if ((hotkey.Modifiers & HotkeyModifier.Alt) != 0) parts.Add("Alt");
-        string key = hotkey.VirtualKey is >= 0x70 and <= 0x7A ? $"F{hotkey.VirtualKey - 0x6F}" : ((char)hotkey.VirtualKey).ToString();
+        string key = KeyName(hotkey.VirtualKey);
         parts.Add(key);
         return string.Join("+", parts);
     }
@@ -679,6 +682,8 @@ public sealed partial class MainWindow : Window
                     updateFound: QueueUpdateDownloading);
                 if (!_disposed && result.Kind == UpdateScanKind.Ready)
                     MarkUpdateReady(result.Version);
+                else if (!_disposed && result.Kind == UpdateScanKind.UpToDate)
+                    Localized.SetText(UpdateStatusText, "UpdateLatest");
             }
         }
         catch (OperationCanceledException) { }
@@ -840,12 +845,13 @@ public sealed partial class MainWindow : Window
     private void DisposeServices()
     {
         if (_disposed) return;
+        if (_protectionSaveTimer?.IsRunning == true) { _protectionSaveTimer.Stop(); SaveSettings(); }
         _disposed = true;
         _autoUpdateTimer.Stop();
         _autoUpdateTimer.Tick -= OnAutoUpdateTimer;
         _idleMonitor.Dispose();
-        if (_privacyHotkeyRegistered) NativeMethods.UnregisterHotKey(WindowNative.GetWindowHandle(this), PrivacyHotkeyId);
-        _privacyHotkeyRegistered = false;
+        _privacyHotkey.Pressed -= OnPrivacyHotkey;
+        _privacyHotkey.Dispose();
         _screenPrivacy.ResumeRequested -= OnResumeScreenRequested;
         _screenPrivacy.Dispose();
         _updateShutdown.Cancel();

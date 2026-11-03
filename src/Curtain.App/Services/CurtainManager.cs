@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using Curtain.App.Interop;
 using Curtain.Core.Sessions;
+using Curtain.Core.Settings;
 using Microsoft.UI.Dispatching;
 
 namespace Curtain.App.Services;
@@ -13,6 +14,12 @@ internal sealed class CurtainManager : IDisposable
     private readonly DispatcherQueueTimer _watchdog;
     private bool _disposed;
     private bool _idleForcedClosed;
+    internal WindowProtectionSettings ProtectionDefaults { get; private set; } = new();
+    internal void SetProtectionDefaults(WindowProtectionSettings settings)
+    {
+        ProtectionDefaults = settings;
+        foreach (var session in _sessions.Values.ToArray()) session.SetProtectionDefaults(settings);
+    }
     internal bool HasWindows => _sessions.Count != 0;
     public ObservableCollection<ProtectedWindowItem> Windows { get; } = new();
     public event Action<string>? Notice;
@@ -43,7 +50,7 @@ internal sealed class CurtainManager : IDisposable
         CurtainSession? session = null;
         try
         {
-            session = new(target, _dispatcher);
+            session = new(target, _dispatcher, ProtectionDefaults);
             if (_idleForcedClosed) session.SetIdleForcedClosed(true);
             session.Ended += OnEnded;
             session.Notice += OnNotice;

@@ -13,8 +13,6 @@ internal sealed class WindowPicker : IDisposable
     private readonly CurtainManager _manager;
     private readonly DispatcherQueue _dispatcher;
     private readonly DispatcherQueueTimer _timer;
-    private readonly nint _management;
-    private nint _expectedForeground;
     private SelectionOutlineWindow? _outline;
     private SelectionSpotlightWindow? _spotlight;
     private SelectionMouseHook? _hook;
@@ -28,22 +26,18 @@ internal sealed class WindowPicker : IDisposable
     public event Action<LocalizationMessage>? PreviewChanged;
     public event Func<nint, LocalizationMessage, CurtainSession?>? Finished;
     public event Action? HandoffCompleted;
-    internal WindowPicker(CurtainManager manager, DispatcherQueue dispatcher, nint management)
+    internal WindowPicker(CurtainManager manager, DispatcherQueue dispatcher)
     {
-        _manager = manager; _dispatcher = dispatcher; _management = management;
+        _manager = manager; _dispatcher = dispatcher;
         _timer = dispatcher.CreateTimer();
         _timer.Interval = TimeSpan.FromMilliseconds(50); _timer.IsRepeating = true;
         _timer.Tick += OnTick;
     }
-    internal void Start() => Start(_management);
-
-    internal void Start(nint expectedForeground)
+    internal void Start()
     {
         if (IsActive) return;
-        if (expectedForeground == nint.Zero) throw new InvalidOperationException("PickerNoForeground");
         _outline = new SelectionOutlineWindow();
         IsActive = true; _candidate = null; _until = DateTime.UtcNow.AddSeconds(45);
-        _expectedForeground = expectedForeground;
         int generation = ++_generation;
         _f8Down = (NativeMethods.GetAsyncKeyState(0x77) & 0x8000) != 0;
         try
@@ -80,7 +74,7 @@ internal sealed class WindowPicker : IDisposable
         if (!IsActive) return;
         try
         {
-            if (DateTime.UtcNow >= _until || NativeMethods.GetForegroundWindow() != _expectedForeground)
+            if (DateTime.UtcNow >= _until)
             { Stop(0, "PickerEnded"); return; }
             if ((NativeMethods.GetAsyncKeyState(0x1B) & 0x8000) != 0) { Stop(0, "PickerCancelled"); return; }
             if (!NativeMethods.GetCursorPos(out var cursor)) return;

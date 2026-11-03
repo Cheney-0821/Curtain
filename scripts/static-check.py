@@ -180,8 +180,8 @@ if sources_path.is_file():
         for path in license_files
         if path.is_file() and path != sources_path
     }
-    if len(source_rows) != 25 or set(recorded) != archived:
-        ERRORS.append("third-party source and hash records do not cover all 25 archived texts")
+    if len(source_rows) != 32 or set(recorded) != archived:
+        ERRORS.append("third-party source and hash records do not cover all 32 archived texts")
     for relative, expected in recorded.items():
         path = ROOT / relative
         if path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest().upper() != expected:
@@ -205,8 +205,7 @@ if notice_docs.is_file() and notice_root.is_file():
         ERRORS.append("root and docs THIRD-PARTY-NOTICES.md differ")
     notice_text = notice_docs.read_text(encoding="utf-8")
     for expected_path in (
-        "候选源码路径：`licenses/third-party/velopack/1.2.161/LICENSE`",
-        "打包后路径：`licenses/velopack/1.2.161/LICENSE`",
+        "候选源码路径与打包后路径均为 `licenses/third-party/velopack/1.2.161/LICENSE`",
     ):
         if expected_path not in notice_text:
             ERRORS.append(f"third-party notice is missing the Velopack path distinction: {expected_path}")
@@ -243,7 +242,9 @@ for xaml_path in (path for path in xml_paths if path.suffix.lower() == ".xaml"):
         ERRORS.append(f"XAML code-behind is missing: {code_path.relative_to(ROOT)}")
         continue
     if handlers:
-        code = code_path.read_text(encoding="utf-8")
+        # A XAML class can keep handlers in other same-name partial class files.
+        code_paths = {code_path, *code_path.parent.glob(f"{xaml_path.stem}.*.cs")}
+        code = "\n".join(path.read_text(encoding="utf-8") for path in sorted(code_paths))
         for handler in sorted(handlers):
             event_count += 1
             declaration = re.compile(rf"\b(?:async\s+)?void\s+{re.escape(handler)}\s*\(")
@@ -257,6 +258,8 @@ if pack_script.is_file():
         ERRORS.append("B3-Pack does not recursively copy the third-party license archive")
     if "docs/THIRD-PARTY-NOTICES.md" not in pack_text:
         ERRORS.append("B3-Pack no longer copies docs/THIRD-PARTY-NOTICES.md")
+    if "-p:DebugType=None -p:DebugSymbols=false" not in pack_text or "-Filter '*.pdb' -File -Recurse | Remove-Item -Force" not in pack_text:
+        ERRORS.append("B3-Pack must exclude debug symbols from the release package")
     if "$projectLicense = Join-Path $repo 'LICENSE'" not in pack_text or "Destination (Join-Path $publish 'LICENSE')" not in pack_text:
         ERRORS.append("B3-Pack no longer copies the project LICENSE")
 workflow = ROOT / ".github/workflows/core-tests.yml"

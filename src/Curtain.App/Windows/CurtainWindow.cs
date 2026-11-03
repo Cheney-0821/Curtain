@@ -1,199 +1,246 @@
+using System.Diagnostics;
+using System.Numerics;
+using System.Runtime.InteropServices;
 using Curtain.App.Interop;
 using Curtain.App.Services;
 using Curtain.Core.Geometry;
-using Microsoft.UI;
-using Microsoft.UI.Composition;
-using Microsoft.UI.Composition.SystemBackdrops;
+using Curtain.Core.Rendering;
+using Curtain.Core.Settings;
+using Microsoft.Graphics.Canvas.Effects;
 using Microsoft.UI.Dispatching;
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media;
+using Windows.UI.Composition;
+using Windows.UI.Composition.Desktop;
 using WinRT;
-using WinRT.Interop;
-using Windows.UI.ViewManagement;
-
 namespace Curtain.App.Windows;
 
-internal sealed class CurtainWindow : Window
+// An independent desktop backdrop host; no target-window capture.
+internal sealed class CurtainWindow
 {
-    private readonly Grid _surface;
-    private OverlayOpacityFade? _fade;
-    private DesktopAcrylicController? _acrylic;
-    private SystemBackdropConfiguration? _backdropConfiguration;
+    private const string ClassName = "Curtain.Gaussian.Overlay";
+    private static readonly HandleNative.WindowProc Procedure = HandleNative.DefWindowProcW;
+    private static bool _registered;
+    private readonly Compositor _compositor;
+    private readonly DesktopWindowTarget _target;
+    private readonly SpriteVisual _visual;
+    private CompositionBackdropBrush _backdrop;
+    private readonly CompositionEffectFactory _factory;
+    private CompositionEffectBrush _effect;
+    private readonly WindowMessageHost _messages;
+    private readonly OverlayOpacityFade _input;
+    private readonly DispatcherQueueTimer _timer;
+    private readonly DispatcherQueue _dispatcher;
+    private readonly long _protectedWindowHandle;
+    private readonly uint _protectedProcessId;
+    private bool _disposed, _desiredVisible, _running, _firstPaintQueued, _firstFramePresented;
     private bool? _lastMaximized;
-    private bool _disposed;
-    private Microsoft.UI.Xaml.Input.Pointer? _pointer;
-    private WindowMessageHost? _messageHost;
-    private bool _firstPaintQueued;
-    private bool _firstFramePresented;
     private Action? _firstFrameCallback;
+    private WindowProtectionSettings _settings = new();
+    private double _ramp, _from, _to, _duration;
+    private long _started;
+    private bool _pendingShow;
+    private int _showGeneration, _warmupTicks;
+    internal event Action? RenderFailed;
     public nint Handle { get; }
-    public bool HasSurfaceCapture => _pointer is not null;
+    public bool HasSurfaceCapture => GetCapture() == Handle;
+    internal bool IsVisible => NativeMethods.IsWindowVisible(Handle);
     public event Action<PixelPoint>? SurfacePressed;
     public event Action<PixelPoint>? SurfaceMoved;
     public event Action? SurfaceEnded;
 
-    public CurtainWindow()
+    public CurtainWindow(DispatcherQueue dispatcher, long protectedWindowHandle, uint protectedProcessId)
     {
-        _surface = new Grid { Background = new SolidColorBrush(global::Windows.UI.Color.FromArgb(255, 48, 48, 48)) };
-        _surface.PointerPressed += OnPointerPressed;
-        _surface.PointerMoved += OnPointerMoved;
-        _surface.PointerReleased += (_, e) => { e.Handled = true; ReleaseSurfaceCapture(); };
-        _surface.PointerCanceled += (_, _) => ReleaseSurfaceCapture();
-        _surface.PointerCaptureLost += (_, _) => ReleaseSurfaceCapture();
-        Content = _surface;
-        Handle = WindowNative.GetWindowHandle(this);
-        NativeMethods.RemoveWindowChrome(Handle);
-        _messageHost = new WindowMessageHost(Handle);
-        _messageHost.AfterMessage += OnMessageAfterDefault;
-        if (InitializeBackdrop()) _surface.Background = new SolidColorBrush(Colors.Transparent);
-        _fade = new OverlayOpacityFade(Handle, DispatcherQueue);
-        Closed += (_, _) => ReleaseResources();
-    }
-
-    private void ReleaseResources()
-    {
-        if (_disposed) return;
-        _disposed = true;
-        ReleaseSurfaceCapture();
-        if (_messageHost is not null)
+        _dispatcher = dispatcher;
+        _protectedWindowHandle = protectedWindowHandle;
+        _protectedProcessId = protectedProcessId;
+        dispatcher.EnsureSystemDispatcherQueue();
+        if (!_registered)
         {
-            _messageHost.AfterMessage -= OnMessageAfterDefault;
-            _messageHost.Dispose();
-            _messageHost = null;
+            var cls = new HandleNative.WindowClass { Size = (uint)Marshal.SizeOf<HandleNative.WindowClass>(),
+                Name = ClassName, Instance = HandleNative.GetModuleHandleW(null),
+                Proc = Marshal.GetFunctionPointerForDelegate(Procedure), Cursor = HandleNative.LoadCursorW(0, (nint)32512) };
+            if (HandleNative.RegisterClassExW(ref cls) == 0) throw new System.ComponentModel.Win32Exception();
+            _registered = true;
         }
-        NotifyFirstFramePresented();
-        _fade?.Dispose(); _fade = null;
-        _acrylic?.Dispose(); _acrylic = null;
-        _backdropConfiguration = null;
-    }
-
-    private bool InitializeBackdrop()
-    {
-        DesktopAcrylicController? candidate = null;
+        Handle = HandleNative.CreateWindowExW(0x00200000 | 0x08000000 | 0x80, ClassName,
+            "Curtain privacy overlay", 0x80000000, 0, 0, 1, 1, 0, 0, HandleNative.GetModuleHandleW(null), 0);
+        if (Handle == 0) throw new System.ComponentModel.Win32Exception();
         try
         {
-            if (!DesktopAcrylicController.IsSupported()) throw new NotSupportedException();
-            DispatcherQueue.EnsureSystemDispatcherQueue();
-            _backdropConfiguration = new SystemBackdropConfiguration
-            {
-                IsInputActive = true,
-                Theme = SystemBackdropTheme.Light
-            };
-            candidate = new DesktopAcrylicController
-            {
-                Kind = DesktopAcrylicKind.Base,
-                TintColor = Colors.White,
-                TintOpacity = 0,
-                LuminosityOpacity = 0,
-                FallbackColor = global::Windows.UI.Color.FromArgb(255, 48, 48, 48)
-            };
-            if (!candidate.AddSystemBackdropTarget(this.As<ICompositionSupportsSystemBackdrop>()))
-                throw new InvalidOperationException("Backdrop target rejected.");
-            candidate.SetSystemBackdropConfiguration(_backdropConfiguration);
-            _acrylic = candidate;
-            return true;
+            int disabled = 0;
+            Marshal.ThrowExceptionForHR(DwmSetWindowAttribute(Handle, 17, ref disabled, 4));
+            var margins = new Margins { Left = -1, Right = -1, Top = -1, Bottom = -1 };
+            Marshal.ThrowExceptionForHR(DwmExtendFrameIntoClientArea(Handle, ref margins));
+            _compositor = new Compositor();
+            _compositor.As<ICompositorDesktopInterop>().CreateDesktopWindowTarget(Handle, false, out nint raw);
+            try { _target = MarshalInterface<DesktopWindowTarget>.FromAbi(raw); }
+            finally { if (raw != 0) Marshal.Release(raw); }
+            _visual = _compositor.CreateSpriteVisual(); _visual.Size = Vector2.One;
+            _backdrop = _compositor.CreateBackdropBrush();
+            using var blur = new GaussianBlurEffect { Name = "Blur", BlurAmount = 0,
+                BorderMode = EffectBorderMode.Hard, Source = new CompositionEffectSourceParameter("Source") };
+            _factory = _compositor.CreateEffectFactory(blur, new[] { "Blur.BlurAmount" });
+            _effect = _factory.CreateBrush(); _effect.SetSourceParameter("Source", _backdrop);
+            _visual.Brush = _effect; _target.Root = _visual;
+            _input = new OverlayOpacityFade(Handle, dispatcher);
+            _messages = new WindowMessageHost(Handle); _messages.AfterMessage += OnMessage;
+            _timer = dispatcher.CreateTimer(); _timer.Interval = TimeSpan.FromMilliseconds(16); _timer.IsRepeating = true;
+            _timer.Tick += (_, _) => Tick();
         }
-        catch (Exception ex)
+        catch
         {
-            candidate?.Dispose();
-            _acrylic = null;
-            _backdropConfiguration = null;
-            DevelopmentDiagnostics.Write("backdrop-host-fallback", new { exception = ex.GetType().Name, ex.HResult });
-            return false;
+            _messages?.Dispose(); _input?.Dispose(); _timer?.Stop();
+            if (_target is not null) _target.Root = null;
+            _effect?.Dispose(); _factory?.Dispose(); _backdrop?.Dispose(); _visual?.Dispose();
+            _target?.Dispose(); _compositor?.Dispose();
+            HandleNative.DestroyWindow(Handle); throw;
         }
     }
-    internal void CloseOwnedWindow()
+    internal bool ConfigureWorkingProtection(WindowProtectionSettings settings)
     {
-        // Windows may already have destroyed this owned HWND with its external owner.
-        if (NativeMethods.IsWindow(Handle)) Close();
-        ReleaseResources();
-    }
-
-    internal bool IsVisible => _fade?.IsVisible == true;
-
-    internal void SetProtectedVisible(bool visible, bool animate, long? batchStart = null)
-    {
-        if (_disposed) return;
-        bool canAnimate = animate && _acrylic is not null && SystemEffectsAllowAnimation();
-        _fade?.SetVisible(visible, canAnimate, batchStart);
-    }
-
-    internal void CancelAndHide() => _fade?.CancelAndHide();
-
-    internal bool WaitForFirstFrame(Action callback)
-    {
-        ArgumentNullException.ThrowIfNull(callback);
-        if (_disposed || _firstFramePresented) return false;
-        _firstFrameCallback += callback;
+        if (_disposed) return false;
+        if (settings == _settings) return true;
+        double previousAmount = _settings.BlurAmount;
+        if (settings.AllowClickThrough) ReleaseSurfaceCapture();
+        _input.SetPointerPassthrough(settings.AllowClickThrough);
+        _settings = settings; ApplyBlur();
+        if (IsVisible && !_running && Math.Abs(previousAmount - settings.BlurAmount) >= 2)
+        {
+            using var transition = _compositor.CreateScalarKeyFrameAnimation();
+            transition.Duration = TimeSpan.FromMilliseconds(120);
+            transition.InsertKeyFrame(0, (float)(previousAmount * _ramp / 255));
+            transition.InsertKeyFrame(1, (float)(settings.BlurAmount * _ramp / 255));
+            _effect.StartAnimation("Blur.BlurAmount", transition);
+        }
         return true;
     }
-
-    private void OnMessageAfterDefault(uint message, nint wParam, nint lParam)
+    private void ApplyBlur()
     {
-        const uint WmPaint = 0x000F;
-        if (message != WmPaint || _firstPaintQueued || _disposed || !NativeMethods.IsWindowVisible(Handle)) return;
-        _firstPaintQueued = true;
-        if (!DispatcherQueue.TryEnqueue(CompleteFirstPaint)) _firstPaintQueued = false;
+        _effect.StopAnimation("Blur.BlurAmount");
+        _effect.Properties.InsertScalar("Blur.BlurAmount", (float)(_settings.BlurAmount * _ramp / 255));
     }
-
-    private void CompleteFirstPaint()
+    internal void SetProtectedVisible(bool visible, bool animate, long? batchStart = null)
     {
-        if (_disposed)
+        if (_disposed || (_desiredVisible == visible && (_running || _pendingShow || IsVisible == visible))) return;
+        if (_running) Tick();
+        _desiredVisible = visible;
+        int generation = ++_showGeneration;
+        _pendingShow = false; _warmupTicks = 0;
+        if (!visible && _ramp == 0) { CancelAndHide(); return; }
+        if (visible && !IsVisible && _firstFramePresented)
         {
-            NotifyFirstFramePresented();
+            _pendingShow = true;
+            _ramp = 0; _visual.Opacity = 0.001f;
+            RefreshBackdropInput();
+            ApplyBlur();
+            _ = ShowFreshBackdropAsync(generation, animate);
             return;
         }
-        if (!NativeMethods.IsWindowVisible(Handle))
+        _visual.Opacity = 1;
+        if (!animate)
         {
-            _firstPaintQueued = false;
-            return;
+            _ramp = visible ? 255 : 0; ApplyBlur(); NativeMethods.ShowWindow(Handle, visible ? 4 : 0);
+            _timer.Stop(); _running = false; return;
         }
-        NotifyFirstFramePresented();
+        _from = _ramp; _to = visible ? 255 : 0;
+        _duration = OverlayFadeCurve.DurationFor(_from, _to);
+        _started = batchStart ?? Stopwatch.GetTimestamp(); ApplyBlur();
+        if (visible) NativeMethods.ShowWindow(Handle, 4);
+        _running = true; _timer.Start();
     }
-
-    private void NotifyFirstFramePresented()
+    private void RefreshBackdropInput()
     {
-        if (_firstFramePresented) return;
-        _firstFramePresented = true;
-        Action? callback = _firstFrameCallback;
-        _firstFrameCallback = null;
-        try { callback?.Invoke(); }
-        catch (Exception ex)
-        {
-            DevelopmentDiagnostics.Write("overlay-first-paint-callback-error", new { exception = ex.GetType().Name, ex.HResult });
-        }
+        // Preserve the compiled effect factory, but discard hidden-window sampling state.
+        var source = _compositor.CreateBackdropBrush();
+        var effect = _factory.CreateBrush();
+        effect.SetSourceParameter("Source", source);
+        var oldEffect = _effect; var oldSource = _backdrop;
+        _effect = effect; _backdrop = source; _visual.Brush = effect;
+        oldEffect.Dispose(); oldSource.Dispose();
     }
-
-    private static bool SystemEffectsAllowAnimation()
+    private async Task ShowFreshBackdropAsync(int generation, bool animate)
     {
         try
         {
-            var settings = new UISettings();
-            return settings.AnimationsEnabled && settings.AdvancedEffectsEnabled;
+            // Submit the new input/hidden visual before exposing the native HWND.
+            await _compositor.RequestCommitAsync().AsTask().WaitAsync(TimeSpan.FromMilliseconds(250));
+            if (_disposed || generation != _showGeneration || !_desiredVisible) return;
+            _pendingShow = false;
+            if (!animate)
+            {
+                _ramp = 255; ApplyBlur(); _visual.Opacity = 1; NativeMethods.ShowWindow(Handle, 4);
+                return;
+            }
+            _from = 0; _to = 255; _duration = OverlayFadeCurve.FullDurationMs;
+            _started = Stopwatch.GetTimestamp(); _warmupTicks = 2;
+            NativeMethods.ShowWindow(Handle, 4); _running = true; _timer.Start();
+            DevelopmentDiagnostics.Write("backdrop-input-refreshed", new { generation });
         }
-        catch { return false; }
+        catch (Exception ex)
+        {
+            if (_disposed || generation != _showGeneration) return;
+            _pendingShow = false;
+            DevelopmentDiagnostics.Write("backdrop-refresh-failed", new
+            {
+                targetWindow = _protectedWindowHandle,
+                targetProcessId = _protectedProcessId,
+                overlayWindow = Handle.ToInt64(),
+                exception = ex.GetType().Name,
+                ex.HResult
+            });
+            RenderFailed?.Invoke();
+        }
     }
-
-    private void OnPointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    private void Tick()
     {
-        e.Handled = true;
-        if (!e.GetCurrentPoint(_surface).Properties.IsLeftButtonPressed || !NativeMethods.GetCursorPos(out var point)) return;
-        if (_surface.CapturePointer(e.Pointer)) _pointer = e.Pointer;
-        SurfacePressed?.Invoke(new PixelPoint(point.X, point.Y));
+        if (_disposed || !_running) return;
+        if (_warmupTicks > 0)
+        {
+            if (--_warmupTicks == 0) { _visual.Opacity = 1; _started = Stopwatch.GetTimestamp(); }
+            return;
+        }
+        double elapsed = Stopwatch.GetElapsedTime(_started).TotalMilliseconds;
+        _ramp = OverlayFadeCurve.Sample(_from, _to, elapsed, _duration); ApplyBlur();
+        if (elapsed < _duration) return;
+        _running = false; _timer.Stop();
+        if (!_desiredVisible) NativeMethods.ShowWindow(Handle, 0);
     }
-    private void OnPointerMoved(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    internal void CancelAndHide()
     {
-        e.Handled = true;
-        if (_pointer is not null && NativeMethods.GetCursorPos(out var point))
-            SurfaceMoved?.Invoke(new PixelPoint(point.X, point.Y));
+        if (_disposed) return;
+        ++_showGeneration; _pendingShow = false; _warmupTicks = 0;
+        _timer.Stop(); _running = _desiredVisible = false; _ramp = 0;
+        NativeMethods.ShowWindow(Handle, 0); _visual.Opacity = 1; ReleaseSurfaceCapture();
+    }
+    private void OnMessage(uint message, nint wParam, nint lParam)
+    {
+        if (_disposed) return;
+        if (message == 0x0005 && GetClientRect(Handle, out var client))
+            _visual.Size = new Vector2(Math.Max(1, client.Right - client.Left), Math.Max(1, client.Bottom - client.Top));
+        else if (message == 0x0201 && !_settings.AllowClickThrough)
+        {
+            SetCapture(Handle);
+            if (NativeMethods.GetCursorPos(out var point)) SurfacePressed?.Invoke(new(point.X, point.Y));
+        }
+        else if (message == 0x0200 && HasSurfaceCapture && NativeMethods.GetCursorPos(out var point))
+            SurfaceMoved?.Invoke(new(point.X, point.Y));
+        else if (message is 0x0202 or 0x001F or 0x0215) ReleaseSurfaceCapture();
+        else if (message == 0x000F && !_firstPaintQueued && IsVisible)
+        { _firstPaintQueued = true; _dispatcher.TryEnqueue(NotifyFirstFrame); }
+    }
+    internal bool WaitForFirstFrame(Action callback)
+    {
+        if (_disposed || _firstFramePresented) return false;
+        _firstFrameCallback += callback; return true;
+    }
+    private void NotifyFirstFrame()
+    {
+        _firstFramePresented = true;
+        var callback = _firstFrameCallback; _firstFrameCallback = null; callback?.Invoke();
     }
     public void ReleaseSurfaceCapture()
     {
-        if (_pointer is not { } pointer) return;
-        _pointer = null;
-        if (NativeMethods.IsWindow(Handle)) _surface.ReleasePointerCapture(pointer);
-        SurfaceEnded?.Invoke();
+        if (!HasSurfaceCapture) return;
+        ReleaseCapture(); SurfaceEnded?.Invoke();
     }
     public void SetTargetMaximized(bool maximized)
     {
@@ -201,4 +248,23 @@ internal sealed class CurtainWindow : Window
         _lastMaximized = maximized;
         NativeMethods.TrySetCornerPreference(Handle, maximized ? NativeMethods.DWMWCP_DONOTROUND : NativeMethods.DWMWCP_ROUND);
     }
+    internal void CloseOwnedWindow()
+    {
+        if (_disposed) return;
+        CancelAndHide(); _disposed = true;
+        _timer.Stop(); _messages.Dispose(); _input.Dispose(); NotifyFirstFrame();
+        _target.Root = null; _visual.Brush = null;
+        _effect.Dispose(); _factory.Dispose(); _backdrop.Dispose(); _visual.Dispose(); _target.Dispose(); _compositor.Dispose();
+        if (NativeMethods.IsWindow(Handle)) HandleNative.DestroyWindow(Handle);
+    }
+    [ComImport, Guid("29E691FA-4567-4DCA-B319-D0F207EB6807"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface ICompositorDesktopInterop
+    { void CreateDesktopWindowTarget(nint hwnd, [MarshalAs(UnmanagedType.Bool)] bool topmost, out nint result); }
+    [StructLayout(LayoutKind.Sequential)] private struct Margins { public int Left, Right, Top, Bottom; }
+    [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(nint hwnd, int attribute, ref int value, int size);
+    [DllImport("dwmapi.dll")] private static extern int DwmExtendFrameIntoClientArea(nint hwnd, ref Margins margins);
+    [DllImport("user32.dll")] private static extern nint SetCapture(nint hwnd);
+    [DllImport("user32.dll")] private static extern nint GetCapture();
+    [DllImport("user32.dll")] private static extern bool ReleaseCapture();
+    [DllImport("user32.dll")] private static extern bool GetClientRect(nint hwnd, out NativeMethods.Rect rect);
 }

@@ -18,10 +18,12 @@ New-Item -ItemType Directory -Force -Path $publish | Out-Null
 dotnet publish $project -c Release -r win-x64 --self-contained true -o $publish `
   -p:Platform=x64 -p:Version=$Version -p:WindowsAppSDKSelfContained=true `
   -p:EnableMsixTooling=true -p:PublishReadyToRun=false `
-  -p:PublishSingleFile=false -p:PublishTrimmed=false
+  -p:PublishSingleFile=false -p:PublishTrimmed=false `
+  -p:DebugType=None -p:DebugSymbols=false
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed' }
 $publishedExe = Join-Path $publish 'Curtain.App.exe'
 if (-not (Test-Path $publishedExe)) { throw 'Curtain.App.exe missing after publish' }
+Get-ChildItem -LiteralPath $publish -Filter '*.pdb' -File -Recurse | Remove-Item -Force
 
 # Keep the notices beside every published build and inside the Velopack packages.
 $projectLicense = Join-Path $repo 'LICENSE'
@@ -35,7 +37,7 @@ if (Test-Path $licenseDestination) {
     Remove-Item -LiteralPath $licenseDestination -Recurse -Force
 }
 New-Item -ItemType Directory -Force -Path $licenseDestination | Out-Null
-Copy-Item -Path (Join-Path $licenseSource '*') -Destination $licenseDestination -Recurse -Force
+Copy-Item -LiteralPath $licenseSource -Destination $licenseDestination -Recurse -Force
 Copy-Item -LiteralPath $noticesSource -Destination (Join-Path $publish 'THIRD-PARTY-NOTICES.md') -Force
 Copy-Item -LiteralPath $projectLicense -Destination (Join-Path $publish 'LICENSE') -Force
 Write-Host "Publish output: $publish"

@@ -18,11 +18,16 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(CurtainTestSettings)' == 'true'">
+    <DefineConstants>$(DefineConstants);CURTAIN_TEST_SETTINGS</DefineConstants>
+  </PropertyGroup>
   <ItemGroup>
     <Content Include="Assets\Curtain.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="Assets\Curtain.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
     <PackageReference Include="Velopack" Version="1.2.161" />
+    <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.4.0" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" Version="8.2.251219" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.7175" />
     <ProjectReference Include="../Curtain.Core/Curtain.Core.csproj" />
   </ItemGroup>

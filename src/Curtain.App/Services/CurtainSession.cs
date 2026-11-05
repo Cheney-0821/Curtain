@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Diagnostics;
 using Curtain.App.Interop;
 using Curtain.App.Windows;
@@ -29,6 +29,18 @@ internal sealed class CurtainSession : IDisposable
     private bool? _idleUserOverrideClosed;
     private Process? _process;
     private string _applicationName = string.Empty;
+    internal string SessionId { get; } = Guid.NewGuid().ToString("N");
+    private readonly string _operationId;
+    private string? _ruleId;
+    internal string OperationId => _operationId;
+    internal string? RuleId => _ruleId;
+    internal void AssociateRememberedRule(Guid ruleId)
+    {
+        if (_disposed) return;
+        _ruleId = ruleId.ToString("N");
+        _curtain?.AssociateRememberedRule(_ruleId);
+    }
+
     private nint Handle => (nint)Target.Identity.Handle;
     public ProtectedTarget Target { get; }
     public ProtectedWindowItem Item { get; }
@@ -37,12 +49,23 @@ internal sealed class CurtainSession : IDisposable
     public event Action<string>? Notice;
     internal bool WaitForFirstFrame(Action callback) => _curtain?.WaitForFirstFrame(callback) == true;
 
-    internal CurtainSession(ProtectedTarget target, DispatcherQueue dispatcher, WindowProtectionSettings defaults)
+    internal CurtainSession(ProtectedTarget target, DispatcherQueue dispatcher, WindowProtectionSettings defaults,
+        bool initiallyClosed = true, WindowProtectionSettings? customProtection = null,
+        string? operationId = null, string? ruleId = null)
     {
+        _operationId = operationId ?? CurtainDiagnostics.NewOperationId();
+        _ruleId = ruleId;
         _defaults = defaults;
+        CustomProtection = customProtection is null ? null : WindowBlurScale.Normalize(customProtection);
         Target = target;
-        Target.SetClosed(true);
+        _manualClosed = initiallyClosed;
+        Target.SetClosed(initiallyClosed);
         Item = new(this, Localization.LocalizationService.Get("ProtectedApplication"));
+        string stage = "process-open";
+        CurtainDiagnostics.Write("session.create.started", operationId: _operationId,
+            stage: stage, reasonCode: initiallyClosed ? "InitiallyClosed" : "InitiallyOpen",
+            hwnd: target.Identity.Handle, targetProcessId: (int)target.Identity.ProcessId,
+            sessionId: SessionId, ruleId: _ruleId);
         try
         {
             _process = Process.GetProcessById((int)target.Identity.ProcessId);
@@ -50,38 +73,56 @@ internal sealed class CurtainSession : IDisposable
                 throw new InvalidOperationException("目标进程已经更换。");
             _ = _process.Handle;
             _applicationName = ReadApplicationName(_process);
-            _curtain = new CurtainWindow(dispatcher, Target.Identity.Handle, Target.Identity.ProcessId);
+            stage = "curtain-window-create";
+            _curtain = new CurtainWindow(dispatcher, Target.Identity.Handle, Target.Identity.ProcessId,
+                _operationId, SessionId, _ruleId);
             _curtain.RenderFailed += OnRenderFailed;
+            _curtain.FirstFramePresented += OnFirstFramePresented;
             _curtain.SurfacePressed += OnPressed;
             _curtain.SurfaceMoved += OnMoved;
             _curtain.SurfaceEnded += CancelGesture;
             _pin = new PinWindow();
             _pin.ToggleRequested += Toggle;
+            stage = "owner-assignment";
             if (!NativeMethods.SetOverlayOwner(_curtain.Handle, Handle) ||
                 !NativeMethods.SetOverlayOwner(_pin.Handle, Handle))
                 throw new InvalidOperationException("无法设置保护窗口的归属，未完成绑定。");
-            DevelopmentDiagnostics.Write("overlay-owner", new { target = Target.Identity.Handle,
-                curtainOwner = NativeMethods.GetWindow(_curtain.Handle, NativeMethods.GW_OWNER).ToInt64(),
-                pinOwner = NativeMethods.GetWindow(_pin.Handle, NativeMethods.GW_OWNER).ToInt64() });
+            CurtainDiagnostics.Write("session.overlay.owner-assigned", operationId: _operationId,
+                stage: "owner-assignment", reasonCode: "CurtainOwnerAssigned",
+                hwnd: _curtain.Handle.ToInt64(), ownerHwnd: Handle.ToInt64(), relatedHwnd: _pin.Handle.ToInt64(),
+                targetProcessId: (int)Target.Identity.ProcessId, sessionId: SessionId, ruleId: _ruleId);
+            CurtainDiagnostics.Write("session.overlay.owner-assigned", operationId: _operationId,
+                stage: "owner-assignment", reasonCode: "PinOwnerAssigned",
+                hwnd: _pin.Handle.ToInt64(), ownerHwnd: Handle.ToInt64(), relatedHwnd: _curtain.Handle.ToInt64(),
+                targetProcessId: (int)Target.Identity.ProcessId, sessionId: SessionId, ruleId: _ruleId);
+            stage = "target-hooks";
             _hooks = new WindowHooks(dispatcher, Handle, RefreshSafely);
             if (!IsCurrent()) throw new InvalidOperationException("目标已经关闭。");
+            stage = "initial-refresh";
             Refresh(animateVisibilityChange: true);
             if (IsDestroyed) throw new InvalidOperationException("目标已经关闭。");
+            CurtainDiagnostics.Write("session.create.completed", operationId: _operationId,
+                stage: "initial-refresh", reasonCode: "Success", hwnd: target.Identity.Handle,
+                targetProcessId: (int)target.Identity.ProcessId, sessionId: SessionId, ruleId: _ruleId);
+            CurtainDiagnostics.Write("protection.state.changed", operationId: _operationId,
+                stage: "session-create", reasonCode: Target.IsClosed ? "Closed" : "Open",
+                hwnd: Target.Identity.Handle, targetProcessId: (int)Target.Identity.ProcessId,
+                sessionId: SessionId, ruleId: _ruleId);
         }
         catch (Exception ex)
         {
-            DevelopmentDiagnostics.Write("session-create-failed", new
-            {
-                targetWindow = Target.Identity.Handle,
-                targetProcessId = Target.Identity.ProcessId,
-                exception = ex.GetType().Name,
-                ex.HResult
-            });
+            CurtainDiagnostics.WriteException("session.create.failed", ex, operationId: _operationId,
+                stage: stage, reasonCode: "SessionCreateFailed", hwnd: Target.Identity.Handle,
+                targetProcessId: (int)Target.Identity.ProcessId, sessionId: SessionId, ruleId: _ruleId);
             Dispose();
             throw;
         }
     }
     private void OnRenderFailed() { if (!_disposed) Ended?.Invoke(this, "OverlayErrorWindowRemoved"); }
+    private void OnFirstFramePresented() => CurtainDiagnostics.Write("overlay.first-frame-presented",
+        operationId: _operationId, stage: "curtain-window-paint", reasonCode: "Success",
+        hwnd: Target.Identity.Handle, targetProcessId: (int)Target.Identity.ProcessId,
+        sessionId: SessionId, ruleId: _ruleId);
     private static string ReadApplicationName(Process process)
     {
         try
@@ -97,12 +138,18 @@ internal sealed class CurtainSession : IDisposable
     internal bool OwnsOverlay(nint hwnd) => _curtain?.Handle == hwnd || _pin?.Handle == hwnd;
     private bool IsCurrent() => _process is not null && TargetWindow.Matches(Target.Identity, _process);
     internal void Toggle() => SetClosed(!Target.IsClosed);
-    internal void ConfigureWindowProtection(WindowProtectionSettings? custom)
+    internal void ConfigureWindowProtection(WindowProtectionSettings? custom, string? operationId = null)
     {
         if (_disposed) return;
+        WindowProtectionSettings? previous = CustomProtection;
         CustomProtection = custom;
         CancelGesture();
         RefreshSafely();
+        if (previous != CustomProtection)
+            CurtainDiagnostics.Write("protection.settings.changed", operationId: operationId ?? _operationId,
+                stage: "window-settings", reasonCode: custom is null ? "FollowGlobal" : "Custom",
+                hwnd: Target.Identity.Handle, targetProcessId: (int)Target.Identity.ProcessId,
+                sessionId: SessionId, ruleId: _ruleId);
     }
     internal void SetProtectionDefaults(WindowProtectionSettings defaults)
     {
@@ -143,6 +190,10 @@ internal sealed class CurtainSession : IDisposable
         Target.SetClosed(_idleForcedClosed
             ? (_idleUserOverrideClosed ?? true)
             : _manualClosed);
+        CurtainDiagnostics.Write("protection.state.changed", operationId: _operationId,
+            stage: _idleForcedClosed ? "idle-protection" : "window-protection",
+            reasonCode: Target.IsClosed ? "Closed" : "Open", hwnd: Target.Identity.Handle,
+            targetProcessId: (int)Target.Identity.ProcessId, sessionId: SessionId, ruleId: _ruleId);
         RefreshSafely(animateVisibilityChange: animate, forceVisibilityUpdate: true);
     }
     internal void RefreshSafely() => RefreshSafely(animateVisibilityChange: false, forceVisibilityUpdate: false);
@@ -153,13 +204,9 @@ internal sealed class CurtainSession : IDisposable
         try { Refresh(animateVisibilityChange, forceVisibilityUpdate); }
         catch (Exception ex)
         {
-            DevelopmentDiagnostics.Write("session-error", new
-            {
-                targetWindow = Target.Identity.Handle,
-                targetProcessId = Target.Identity.ProcessId,
-                exception = ex.GetType().Name,
-                ex.HResult
-            });
+            CurtainDiagnostics.WriteException("session.refresh.failed", ex, operationId: _operationId,
+                stage: "refresh", reasonCode: "SessionRefreshFailed", hwnd: Target.Identity.Handle,
+                targetProcessId: (int)Target.Identity.ProcessId, sessionId: SessionId, ruleId: _ruleId);
             Ended?.Invoke(this, "OverlayErrorWindowRemoved");
         }
     }
@@ -192,12 +239,27 @@ internal sealed class CurtainSession : IDisposable
         if (_lastPlacement != current)
         {
             _lastPlacement = current;
-            DevelopmentDiagnostics.Write("placement", new { target = Target.Identity.Handle, dpi,
-                targetBounds = bounds.Value, placement, workArea = monitor.Work, monitorBounds = monitor.Monitor });
+            CurtainDiagnostics.Write("overlay.geometry.changed", operationId: _operationId,
+                stage: "window-overlay-geometry", reasonCode: "PositionRecalculated",
+                hwnd: _curtain.Handle.ToInt64(), ownerHwnd: Handle.ToInt64(), relatedHwnd: _pin.Handle.ToInt64(),
+                targetProcessId: (int)Target.Identity.ProcessId,
+                left: bounds.Value.Left, top: bounds.Value.Top, width: bounds.Value.Width, height: bounds.Value.Height,
+                metricName: "Dpi", metricValue: dpi, sessionId: SessionId, ruleId: _ruleId);
+            CurtainDiagnostics.Write("overlay.pin.geometry.changed", operationId: _operationId,
+                stage: "pin-placement", reasonCode: "PositionRecalculated",
+                hwnd: _pin.Handle.ToInt64(), ownerHwnd: Handle.ToInt64(), relatedHwnd: _curtain.Handle.ToInt64(),
+                targetProcessId: (int)Target.Identity.ProcessId,
+                left: placement.Bounds.Left, top: placement.Bounds.Top,
+                width: placement.Bounds.Width, height: placement.Bounds.Height,
+                metricName: "Dpi", metricValue: dpi, sessionId: SessionId, ruleId: _ruleId);
         }
         if (_lastClosed != Target.IsClosed) { _lastClosed = Target.IsClosed; _pin.UpdateState(Target.IsClosed); }
         _pin.UpdatePlacement(placement, dpi);
-        NativeMethods.PositionAbove(_curtain.Handle, Handle, bounds.Value, showWindow: false);
+        if (!NativeMethods.PositionAbove(_curtain.Handle, Handle, bounds.Value, showWindow: false))
+            CurtainDiagnostics.Write("overlay.position.failed", CurtainDiagnosticLevel.Warning,
+                operationId: _operationId, stage: "position-above-target", reasonCode: "PositionAboveFailed",
+                hwnd: _curtain.Handle.ToInt64(), targetProcessId: (int)Target.Identity.ProcessId,
+                errorCode: Marshal.GetLastPInvokeError(), sessionId: SessionId, ruleId: _ruleId);
         _curtain.SetTargetMaximized(NativeMethods.IsZoomed(Handle));
         _curtain.ConfigureWorkingProtection(_idleForcedClosed ? new WindowProtectionSettings() : EffectiveProtection);
         nint pinAnchor = Target.IsClosed || _curtain.IsVisible ? _curtain.Handle : Handle;
@@ -214,7 +276,11 @@ internal sealed class CurtainSession : IDisposable
         bool accepted = NativeMethods.SetForegroundWindow(Handle);
         RefreshSafely();
         bool activated = NativeMethods.GetForegroundWindow() == Handle;
-        DevelopmentDiagnostics.Write("activation", new { target = Target.Identity.Handle, accepted, activated });
+        CurtainDiagnostics.Write("window.activation.result", activated ? CurtainDiagnosticLevel.Information : CurtainDiagnosticLevel.Warning,
+            operationId: _operationId, stage: "protected-window-activation",
+            reasonCode: accepted ? activated ? "ForegroundAccepted" : "ForegroundAcceptedButNotActive" : "ForegroundRejected",
+            hwnd: Handle.ToInt64(), targetProcessId: (int)Target.Identity.ProcessId,
+            errorCode: accepted ? 0 : Marshal.GetLastPInvokeError(), sessionId: SessionId, ruleId: _ruleId);
         if (!activated) Notice?.Invoke("TargetWindowNotForeground");
         if (_disposed || NativeMethods.GetVisibleBounds(Handle) is not { } visible ||
             !NativeMethods.GetWindowRect(Handle, out var raw)) return;
@@ -245,8 +311,11 @@ internal sealed class CurtainSession : IDisposable
             nextVisible, _pin.Handle, placement.Bounds);
         if (!moved)
         {
-            DevelopmentDiagnostics.Write("drag-failed", new { target = Target.Identity.Handle,
-                error = Marshal.GetLastPInvokeError() });
+            CurtainDiagnostics.Write("overlay.drag.failed", CurtainDiagnosticLevel.Warning,
+                operationId: _operationId, stage: "move-protected-windows", reasonCode: "MoveProtectedWindowsFailed",
+                hwnd: Handle.ToInt64(), relatedHwnd: _curtain.Handle.ToInt64(), ownerHwnd: _pin.Handle.ToInt64(),
+                targetProcessId: (int)Target.Identity.ProcessId, errorCode: Marshal.GetLastPInvokeError(),
+                sessionId: SessionId, ruleId: _ruleId);
             CancelGesture(); Notice?.Invoke("MoveFailed");
         }
         // The batch already positioned all three windows. WinEvent/watchdog reconcile actual bounds.
@@ -261,15 +330,43 @@ internal sealed class CurtainSession : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        Item.Dispose();
-        CancelGesture(); _hooks?.Dispose(); _hooks = null;
-        _process?.Dispose(); _process = null;
-        if (_pin is not null) { _pin.ToggleRequested -= Toggle; _pin.Close(); _pin = null; }
-        if (_curtain is not null)
+        var failures = new List<Exception>();
+        void Release(string stage, Action cleanup)
         {
-            _curtain.RenderFailed -= OnRenderFailed;
-            _curtain.SurfacePressed -= OnPressed; _curtain.SurfaceMoved -= OnMoved;
-            _curtain.SurfaceEnded -= CancelGesture; _curtain.CancelAndHide(); _curtain.CloseOwnedWindow(); _curtain = null;
+            try { cleanup(); }
+            catch (Exception ex)
+            {
+                failures.Add(ex);
+                CurtainDiagnostics.WriteException("session.cleanup.failed", ex, operationId: _operationId,
+                    stage: stage, reasonCode: "ResourceDisposeFailed", hwnd: Target.Identity.Handle,
+                    targetProcessId: (int)Target.Identity.ProcessId, sessionId: SessionId, ruleId: _ruleId);
+            }
         }
+        Release("item", Item.Dispose);
+        Release("gesture", CancelGesture);
+        var hooks = _hooks; _hooks = null;
+        Release("hooks", () => hooks?.Dispose());
+        var process = _process; _process = null;
+        Release("process", () => process?.Dispose());
+        var pin = _pin; _pin = null;
+        if (pin is not null)
+        {
+            Release("pin-unsubscribe", () => pin.ToggleRequested -= Toggle);
+            Release("pin-close", pin.Close);
+        }
+        var curtain = _curtain; _curtain = null;
+        if (curtain is not null)
+        {
+            Release("overlay-unsubscribe", () =>
+            {
+                curtain.RenderFailed -= OnRenderFailed;
+                curtain.FirstFramePresented -= OnFirstFramePresented;
+                curtain.SurfacePressed -= OnPressed; curtain.SurfaceMoved -= OnMoved;
+                curtain.SurfaceEnded -= CancelGesture;
+            });
+            Release("overlay-hide", curtain.CancelAndHide);
+            Release("overlay-close", curtain.CloseOwnedWindow);
+        }
+        if (failures.Count > 0) throw new AggregateException("SessionCleanupIncomplete", failures);
     }
 }

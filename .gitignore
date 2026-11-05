@@ -9,6 +9,7 @@
 *.log
 reports/
 artifacts/
+/output/
 *.zip
 *.7z
 *.msi

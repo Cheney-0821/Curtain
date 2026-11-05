@@ -8,6 +8,23 @@
             </ResourceDictionary.MergedDictionaries>
             <x:Double x:Key="SettingsCardWrapThreshold">300</x:Double>
             <x:Double x:Key="SettingsCardWrapNoIconThreshold">260</x:Double>
+            <Style x:Key="FullscreenRestoreHandleStyle" TargetType="Button">
+                <Setter Property="Width" Value="104" />
+                <Setter Property="Height" Value="18" />
+                <Setter Property="CornerRadius" Value="9" />
+                <Setter Property="MinWidth" Value="0" />
+                <Setter Property="MinHeight" Value="0" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="UseSystemFocusVisuals" Value="True" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border CornerRadius="{TemplateBinding CornerRadius}" Background="White" BorderBrush="#464646"
+                                    BorderThickness="1" Opacity="0.94" />
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

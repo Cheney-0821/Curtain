@@ -2,14 +2,30 @@ param(
     [Parameter(Mandatory = $true)]
     [ValidatePattern('^\d+\.\d+\.\d+-beta\.\d+(?:\.\d+)*$')]
     [string]$Version,
-    [switch]$PublishOnly
+    [switch]$PublishOnly,
+    [string]$ArtifactRoot
 )
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $project = Join-Path $repo 'src/Curtain.App/Curtain.App.csproj'
-$publish = Join-Path $repo "artifacts/B3/publish-$Version"
-$releaseFeed = Join-Path $repo 'artifacts/B3/r2-feed-beta'
-$installerArchive = Join-Path $repo "artifacts/B3/installer-$Version"
+$artifactRootPath = if ([string]::IsNullOrWhiteSpace($ArtifactRoot)) {
+    Join-Path $repo 'artifacts/B3'
+} else {
+    [System.IO.Path]::GetFullPath($ArtifactRoot)
+}
+$publishName = if ($PublishOnly) { "publish-check-$Version" } else { "publish-$Version" }
+$publish = Join-Path $artifactRootPath $publishName
+$releaseFeed = Join-Path $artifactRootPath 'r2-feed-beta'
+$installerArchive = Join-Path $artifactRootPath "installer-$Version"
+
+New-Item -ItemType Directory -Force -Path $artifactRootPath | Out-Null
+foreach ($target in @($publish) + $(if ($PublishOnly) { @() } else { @($releaseFeed, $installerArchive) })) {
+    if (Test-Path -LiteralPath $target) {
+        if ((Get-ChildItem -LiteralPath $target -Force -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0) {
+            throw "Refusing to overwrite non-empty release output: $target"
+        }
+    }
+}
 
 # A successful build does not prove that a WinUI 3 Publish folder can start.
 # The -PublishOnly switch lets us test the actual shipping binaries first.
@@ -40,6 +56,7 @@ New-Item -ItemType Directory -Force -Path $licenseDestination | Out-Null
 Copy-Item -LiteralPath $licenseSource -Destination $licenseDestination -Recurse -Force
 Copy-Item -LiteralPath $noticesSource -Destination (Join-Path $publish 'THIRD-PARTY-NOTICES.md') -Force
 Copy-Item -LiteralPath $projectLicense -Destination (Join-Path $publish 'LICENSE') -Force
+Write-Host "Artifact root: $artifactRootPath"
 Write-Host "Publish output: $publish"
 Write-Host 'Project LICENSE, third-party license files and notices copied into publish output.'
 

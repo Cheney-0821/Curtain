@@ -15,6 +15,7 @@ internal sealed class SelectionMouseHook : IDisposable
     private readonly SelectionNative.MouseProc _procedure;
     private readonly DispatcherQueue _dispatcher;
     private readonly Action<SelectionOutcome, PixelPoint> _finished;
+    private readonly string _operationId;
     private nint _hook;
     private uint _threadId;
     private volatile bool _stopping;
@@ -23,9 +24,10 @@ internal sealed class SelectionMouseHook : IDisposable
     public bool IsInstalled { get; private set; }
     public int InstallError { get; private set; }
 
-    internal SelectionMouseHook(DispatcherQueue dispatcher, Action<SelectionOutcome, PixelPoint> finished)
+    internal SelectionMouseHook(DispatcherQueue dispatcher, Action<SelectionOutcome, PixelPoint> finished,
+        string operationId)
     {
-        _dispatcher = dispatcher; _finished = finished; _procedure = OnMouse;
+        _dispatcher = dispatcher; _finished = finished; _procedure = OnMouse; _operationId = operationId;
         _thread = new Thread(Run) { IsBackground = true, Name = "Curtain temporary window picker" };
         _thread.Start();
         if (!_ready.Wait(TimeSpan.FromSeconds(2))) { InstallError = 1460; Dispose(); }
@@ -63,14 +65,17 @@ internal sealed class SelectionMouseHook : IDisposable
         {
             InstallError = ex.HResult;
             _ready.Set();
-            DevelopmentDiagnostics.Write("picker-hook-error", new { exception = ex.GetType().Name, ex.HResult });
+            CurtainDiagnostics.WriteException("picker.mouse-hook.failed", ex, operationId: _operationId,
+                stage: "low-level-hook-thread", reasonCode: "HookThreadFailed");
         }
         finally
         {
             if (drainTimer != 0) SelectionNative.KillTimer(0, drainTimer);
             if (_hook != 0) SelectionNative.UnhookWindowsHookEx(_hook);
             _hook = 0; IsInstalled = false;
-            DevelopmentDiagnostics.Write("picker-hook-ended", new { thread = _threadId });
+            CurtainDiagnostics.Write("picker.mouse-hook.stopped", operationId: _operationId,
+                stage: "low-level-hook-thread", reasonCode: "Stopped",
+                metricName: "HookThreadId", metricValue: _threadId);
             if (Volatile.Read(ref _started) != 0) DisposeReady();
             GC.KeepAlive(_procedure);
         }
@@ -94,7 +99,11 @@ internal sealed class SelectionMouseHook : IDisposable
             }
             if (result.Suppress) return 1;
         }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
+        catch (Exception ex)
+        {
+            CurtainDiagnostics.WriteException("picker.mouse-hook.callback-failed", ex,
+                operationId: _operationId, stage: "low-level-hook-callback", reasonCode: "CallbackFailed");
+        }
         return SelectionNative.CallNextHookEx(_hook, code, message, data);
     }
     private void DisposeReady()

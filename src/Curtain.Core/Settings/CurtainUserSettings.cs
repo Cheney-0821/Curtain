@@ -1,6 +1,8 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 
 namespace Curtain.Core.Settings;
+
+using Curtain.Core.Protection;
 
 public static class HotkeyModifier
 {
@@ -10,8 +12,8 @@ public static class HotkeyModifier
     public const uint Windows = 0x0008;
 }
 
-public sealed record GlobalHotkeySettings(bool Enabled = true, uint Modifiers = HotkeyModifier.Control | HotkeyModifier.Shift,
-    uint VirtualKey = 0x78);
+public sealed record GlobalHotkeySettings(bool Enabled = true, uint Modifiers = HotkeyModifier.Alt,
+    uint VirtualKey = 0x53);
 
 public enum AutoProtectionScope { AddedWindows = 0, AllDisplays = 1 }
 
@@ -57,11 +59,14 @@ public sealed record CurtainUserSettings
 {
     public int SchemaVersion { get; init; } = 1;
     public bool StartWithWindows { get; init; }
+    public bool DiagnosticsEnabled { get; init; } = true;
+    public bool IncludeRawEtw { get; init; } = true;
     // Missing from old settings.json => stays true via the property initializer.
     public bool AutoDownloadUpdates { get; init; } = true;
     public GlobalHotkeySettings Hotkey { get; init; } = new();
     public AutoProtectionSettings AutoProtection { get; init; } = new();
-    public GlobalHotkeySettings PrivacyHotkey { get; init; } = new(true, HotkeyModifier.Control | HotkeyModifier.Shift, 0x79);
+    public GlobalHotkeySettings PrivacyHotkey { get; init; } = new(true, HotkeyModifier.Control, 0x28);
+    public PrivacyMouseButton PrivacyMouseButton { get; init; } = PrivacyMouseButton.Off;
     public string BlurPreset { get; init; } = OverlayBlurPreset.Standard;
     public string Language { get; init; } = AppLanguage.System;
     public WindowProtectionSettings WindowProtection { get; init; } = new();
@@ -81,32 +86,84 @@ public sealed class CurtainUserSettingsStore
         _path = Path.Combine(directory, "settings.json");
     }
 
-    public CurtainUserSettingsLoad Load()
+    public CurtainUserSettingsLoad Load() => Load(null);
+
+    public CurtainUserSettingsLoad Load(Action<string, int>? diagnostic)
     {
-        if (!File.Exists(_path)) return new(new CurtainUserSettings(), false);
+        if (!File.Exists(_path))
+        {
+            diagnostic?.Invoke("load-file", 0);
+            return new(new CurtainUserSettings(), false);
+        }
         try
         {
             var info = new FileInfo(_path);
-            if (info.Length is <= 0 or > MaximumFileBytes) return new(new CurtainUserSettings(), true);
-            var settings = JsonSerializer.Deserialize<CurtainUserSettings>(File.ReadAllText(_path), _json);
-            if (settings is null || !IsValid(settings)) return new(new CurtainUserSettings(), true);
+            if (info.Length is <= 0 or > MaximumFileBytes)
+            {
+                diagnostic?.Invoke("load-size-validation", unchecked((int)0x800700DF));
+                return new(new CurtainUserSettings(), true);
+            }
+            string json = File.ReadAllText(_path);
+            diagnostic?.Invoke("load-file", 0);
+            var settings = JsonSerializer.Deserialize<CurtainUserSettings>(json, _json);
+            diagnostic?.Invoke("load-deserialize", 0);
+            if (settings is null || !IsValid(settings))
+            {
+                diagnostic?.Invoke("load-validate", unchecked((int)0x8007000D));
+                return new(new CurtainUserSettings(), true);
+            }
+            diagnostic?.Invoke("load-validate", 0);
             return new(NormalizeNewSettings(settings), false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
+            diagnostic?.Invoke("load-failed", ex.HResult);
             return new(new CurtainUserSettings(), true);
         }
     }
 
-    public void Save(CurtainUserSettings settings)
+    public void Save(CurtainUserSettings settings) => Save(settings, null);
+
+    public void Save(CurtainUserSettings settings, Action<string, int>? diagnostic)
     {
         ArgumentNullException.ThrowIfNull(settings);
         settings = NormalizeNewSettings(settings);
-        if (!IsValid(settings)) throw new ArgumentException("Invalid Curtain settings.", nameof(settings));
-        Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+        if (!IsValid(settings))
+        {
+            diagnostic?.Invoke("save-validate", unchecked((int)0x8007000D));
+            throw new ArgumentException("Invalid Curtain settings.", nameof(settings));
+        }
+        diagnostic?.Invoke("save-validate", 0);
+        string? stage = "save-directory";
         string temporary = _path + ".tmp";
-        File.WriteAllText(temporary, JsonSerializer.Serialize(settings, _json));
-        File.Move(temporary, _path, true);
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+            string json = JsonSerializer.Serialize(settings, _json);
+            stage = "save-temp-write";
+            using (var stream = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None,
+                       16 * 1024, FileOptions.WriteThrough))
+            using (var writer = new StreamWriter(stream, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false), 16 * 1024, leaveOpen: true))
+            {
+                writer.Write(json);
+                writer.Flush();
+                stage = "save-flush";
+                stream.Flush(flushToDisk: true);
+            }
+            diagnostic?.Invoke("save-temp-flushed", 0);
+            stage = "save-replace";
+            if (File.Exists(_path)) File.Replace(temporary, _path, null, ignoreMetadataErrors: true);
+            else File.Move(temporary, _path);
+            diagnostic?.Invoke("save-replace", 0);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or System.Security.SecurityException)
+        {
+            diagnostic?.Invoke(stage, ex.HResult);
+            try { if (File.Exists(temporary)) File.Delete(temporary); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+            throw;
+        }
     }
 
     private static bool IsValid(CurtainUserSettings settings) =>
@@ -121,7 +178,8 @@ public sealed class CurtainUserSettingsStore
     {
         BlurPreset = OverlayBlurPreset.Normalize(settings.BlurPreset),
         Language = AppLanguage.Normalize(settings.Language),
-        WindowProtection = WindowBlurScale.Normalize(settings.WindowProtection ?? new())
+        WindowProtection = WindowBlurScale.Normalize(settings.WindowProtection ?? new()),
+        PrivacyMouseButton = Enum.IsDefined(settings.PrivacyMouseButton) ? settings.PrivacyMouseButton : PrivacyMouseButton.Off
     };
 
     public static bool IsSameShortcut(GlobalHotkeySettings first, GlobalHotkeySettings second) =>
@@ -133,7 +191,7 @@ public sealed class CurtainUserSettingsStore
         bool hasModifier = (hotkey.Modifiers & allowed) != 0;
         bool keyIsModifier = hotkey.VirtualKey is 0x10 or 0x11 or 0x12 or 0x5B or 0x5C;
         return hasModifier && (hotkey.Modifiers & ~allowed) == 0 &&
-            (hotkey.VirtualKey == 0x20 || hotkey.VirtualKey is (>= 0x30 and <= 0x5A) or (>= 0x60 and <= 0x7B)) &&
+            (hotkey.VirtualKey == 0x20 || hotkey.VirtualKey is (>= 0x25 and <= 0x28) or (>= 0x30 and <= 0x5A) or (>= 0x60 and <= 0x7B)) &&
             hotkey.VirtualKey != 0x7B && !keyIsModifier;
     }
 }

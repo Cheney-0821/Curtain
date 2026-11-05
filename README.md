@@ -13,10 +13,10 @@ A lightweight frosted-glass privacy shield for Windows. Cover one window, protec
   <img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-0078D4?style=flat-square" />
   <img alt="WinUI 3" src="https://img.shields.io/badge/WinUI-3-536DFE?style=flat-square" />
   <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-6A4C93?style=flat-square" />
-  <img alt="Beta 0.2.0-beta.5.5" src="https://img.shields.io/badge/release-beta.5.5-64748b?style=flat-square" />
+  <img alt="Beta 0.2.0-beta.6" src="https://img.shields.io/badge/release-beta.6-64748b?style=flat-square" />
 </p>
 
-**[Download for Windows](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.2.0-beta.5.5-Setup.exe)** · **[GitHub Release](https://github.com/Cheney-0821/Curtain/releases/tag/v0.2.0-beta.5.5)** · **[简体中文](README.zh-CN.md)**
+**[Download for Windows](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.2.0-beta.6-Setup.exe)** · **[GitHub Release](https://github.com/Cheney-0821/Curtain/releases/tag/v0.2.0-beta.6)** · **[简体中文](README.zh-CN.md)**
 
 <sub>Windows x64 · Unsigned beta · Windows 11 tested</sub>
 
@@ -80,11 +80,15 @@ Curtain can watch for a period of keyboard and mouse inactivity and start protec
 - **Smart idle behavior.** Temporarily uncover an individual window during an idle-protection session; when the next idle threshold is reached, Curtain protects it again.
 - **Updates without surprise restarts.** Check and download updates in the background; you decide when to install and restart.
 - **Taskbar-friendly minimize.** Minimize Curtain to the taskbar; closing the window still sends it to the tray.
+- **Remembered applications.** Save app protection rules and let Curtain rebind matching windows when those apps start again, including after a restart.
+- **Diagnostics and feedback.** Keep local diagnostics, create a ZIP, and submit it only when you choose; a failed upload leaves the ZIP on your device.
+- **Fullscreen controls.** Reveal the restore button from the upper quarter of the display; it fades after one second outside the area or without pointer movement.
+- **Custom shortcuts.** `Ctrl+Down` toggles fullscreen protection and `Alt+S` starts window selection by default. Both can be changed. Optional mouse Back/Forward buttons are off by default.
 - **Native Windows feel.** Built with WinUI 3 and Windows App SDK.
 
 ## Get started
 
-1. **Download** the [current Windows x64 beta installer](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.2.0-beta.5.5-Setup.exe). This installer is **not code-signed**; Windows may warn that its publisher is unrecognized. Verify the source and do not disable security protections just to install it.
+1. **Download** the [current Windows x64 beta installer](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.2.0-beta.6-Setup.exe). This installer is **not code-signed**; Windows may warn that its publisher is unrecognized. Verify the source and do not disable security protections just to install it.
 2. **Launch Curtain** and choose **Add window** or **Protect entire screen**.
 3. **Set your preferences** in Settings if you want Curtain to activate after inactivity.
 
@@ -95,8 +99,10 @@ Curtain can watch for a period of keyboard and mouse inactivity and start protec
 
 | Shortcut | Action |
 |---|---|
-| <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>F9</kbd> | Enter window selection |
-| <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>F10</kbd> | Toggle whole-desktop protection or end the current automatic protection session |
+| <kbd>Ctrl</kbd> + <kbd>↓</kbd> | Toggle fullscreen protection or end the current automatic protection session |
+| <kbd>Alt</kbd> + <kbd>S</kbd> | Start window selection |
+
+Both shortcuts are customizable. The mouse Back and Forward buttons can optionally toggle fullscreen protection and are off by default. The saved app rules persist and matching windows are rebound when an app starts again; the live list of individual windows is rebuilt from running applications.
 
 Curtain targets Windows x64. The project's minimum Windows target is Windows 10 version 2004 (build 19041), but independent Windows 10 runtime testing has not yet been completed. The current beta has been tested primarily on Windows 11.
 
@@ -104,13 +110,13 @@ Curtain targets Windows x64. The project's minimum Windows target is Windows 10 
 
 ## What Curtain is — and isn't
 
-Curtain is a **visual privacy overlay**, not a Windows sign-in lock, a defense against screenshots/recording, or a security boundary. Some notifications or transient popups may briefly appear above the full-screen overlay before its Z-order is recovered. Gaussian blur strength is adjustable for protected application windows; full-screen protection retains the existing Acrylic material. The list of currently protected running windows does not persist after restarting Curtain.
+Curtain is a **visual privacy overlay**, not a Windows sign-in lock, a defense against screenshots/recording, or a security boundary. Some notifications or transient popups may briefly appear above the full-screen overlay before its Z-order is recovered. Native ETW capture may require administrator privileges and is not verified in a standard-user session. Windows 10, mixed-DPI, monitor hot-plug, and complex multi-display behavior have not received separate device validation; Windows 11 is the primary test environment.
 
 ## Feedback and open source
 
 Curtain's source code is publicly available under **GPL-3.0-only**. Use [GitHub Issues](https://github.com/Cheney-0821/Curtain/issues) to report bugs or suggest improvements.
 
-The current beta installer and in-app update feed are hosted on the official update domain above. The [GitHub Release](https://github.com/Cheney-0821/Curtain/releases/tag/v0.2.0-beta.5.5) includes release notes, the source commit, the installer SHA-256, and a GitHub-hosted installer mirror.
+The current beta installer and in-app update feed are hosted on the official update domain above. The [GitHub Release](https://github.com/Cheney-0821/Curtain/releases/tag/v0.2.0-beta.6) includes release notes, the source commit, the installer SHA-256, and a GitHub-hosted installer mirror.
 
 ## License
 

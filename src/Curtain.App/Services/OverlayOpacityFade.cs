@@ -37,6 +37,7 @@ internal sealed class OverlayOpacityFade : IDisposable
     private long _startedAt;
 
     internal bool IsVisible => IsOwnedWindow() && IsWindowVisible(_hwnd);
+    internal event Action<bool>? VisibilityTransitionCompleted;
     internal static long CaptureBatchStart() => Stopwatch.GetTimestamp();
 
     internal OverlayOpacityFade(nint hwnd, DispatcherQueue dispatcher)
@@ -190,6 +191,7 @@ internal sealed class OverlayOpacityFade : IDisposable
         if (elapsed < _durationMs) return;
         _alpha = _to;
         Stop();
+        VisibilityTransitionCompleted?.Invoke(_desiredVisible);
     }
 
     private void Immediate(bool visible)
@@ -211,6 +213,7 @@ internal sealed class OverlayOpacityFade : IDisposable
             if (_layeredReady && !SetLayeredWindowAttributes(_hwnd, 0, 0, LayeredAlpha))
                 RestoreLayeredStyle();
         }
+        VisibilityTransitionCompleted?.Invoke(visible);
     }
 
     private bool EnsureLayered()

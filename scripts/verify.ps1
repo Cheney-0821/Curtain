@@ -10,12 +10,17 @@ try {
     Write-Host '=== Restore app ==='
     dotnet restore '.\src\Curtain.App\Curtain.App.csproj' -p:Platform=x64
     if ($LASTEXITCODE -ne 0) { throw 'restore app failed' }
+    Write-Host '=== Settings XAML structure ==='
+    & (Join-Path $PSScriptRoot 'Test-SettingsXaml.ps1')
     Write-Host '=== Debug build app ==='
     dotnet build '.\src\Curtain.App\Curtain.App.csproj' -c Debug -p:Platform=x64 --no-restore
     if ($LASTEXITCODE -ne 0) { throw 'Debug build app failed' }
     Write-Host '=== Core assertions ==='
     dotnet run --project '.\tests\Curtain.Core.Tests\Curtain.Core.Tests.csproj' -c Release
     if ($LASTEXITCODE -ne 0) { throw 'Core assertions failed' }
+    Write-Host '=== Win32 input registration assertions ==='
+    dotnet run --project '.\tests\Curtain.Input.Tests\Curtain.Input.Tests.csproj' -c Release
+    if ($LASTEXITCODE -ne 0) { throw 'Win32 input assertions failed' }
     Write-Host '=== Release build app ==='
     dotnet build '.\src\Curtain.App\Curtain.App.csproj' -c Release -p:Platform=x64 --no-restore
     if ($LASTEXITCODE -ne 0) { throw 'Release build app failed' }

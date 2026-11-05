@@ -1,0 +1,20 @@
+{
+  // Configure and verify account-bound resources before deploying this Worker.
+  "name": "curtain-feedback-upload",
+  "main": "src/worker.mjs",
+  "compatibility_date": "2026-11-04",
+  "observability": {
+    "enabled": true,
+    "redact_query_string": true,
+    "logs": { "enabled": true, "invocation_logs": false, "head_sampling_rate": 1, "persist": true },
+    "traces": { "enabled": false }
+  },
+  "routes": [{ "pattern": "feedback.cheneylab.cn", "custom_domain": true }],
+  "r2_buckets": [
+    { "binding": "DIAGNOSTICS_BUCKET", "bucket_name": "YOUR_PRIVATE_DIAGNOSTICS_BUCKET" }
+  ],
+  "ratelimits": [
+    { "name": "IP_UPLOAD_LIMITER", "namespace_id": "YOUR_IP_RATE_LIMIT_NAMESPACE_ID", "simple": { "limit": 2, "period": 60 } },
+    { "name": "GLOBAL_UPLOAD_LIMITER", "namespace_id": "YOUR_GLOBAL_RATE_LIMIT_NAMESPACE_ID", "simple": { "limit": 4, "period": 60 } }
+  ]
+}

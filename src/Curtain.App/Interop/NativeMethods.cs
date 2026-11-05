@@ -97,15 +97,7 @@ internal static class NativeMethods
         return name.ToString();
     }
     public static bool IsSelectableWindow(nint hwnd)
-    {
-        if (!IsExternalWindow(hwnd) || IsIconic(hwnd) || !IsWindowEnabled(hwnd) || IsHungAppWindow(hwnd) ||
-            GetAncestor(hwnd, GA_ROOT) != hwnd || hwnd == GetShellWindow() || hwnd == GetDesktopWindow()) return false;
-        string cls = ClassOf(hwnd);
-        if (cls is "Progman" or "WorkerW" or "Shell_TrayWnd" or "Shell_SecondaryTrayWnd" ||
-            cls.Contains("IME", StringComparison.OrdinalIgnoreCase)) return false;
-        long ex = GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64();
-        return (ex & (WS_EX_TOOLWINDOW | 8)) == 0 && GetVisibleBounds(hwnd) is not null;
-    }
+        => WindowSelectionEvaluator.Evaluate(hwnd).IsSelectable;
     [DllImport("user32.dll")] public static extern nint GetWindow(nint hwnd, uint command);
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(nint hwnd, out uint processId);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowTextW(nint hwnd, StringBuilder text, int maxCount);
@@ -132,7 +124,7 @@ internal static class NativeMethods
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]
     public delegate void WinEventProc(nint hook, uint eventType, nint hwnd, int objectId, int childId, uint thread, uint time);
 
-    [DllImport("user32.dll")] public static extern nint SetWinEventHook(uint eventMin, uint eventMax, nint module,
+    [DllImport("user32.dll", SetLastError = true)] public static extern nint SetWinEventHook(uint eventMin, uint eventMax, nint module,
         WinEventProc callback, uint processId, uint threadId, uint flags);
     [DllImport("user32.dll")] public static extern bool UnhookWinEvent(nint hook);
 

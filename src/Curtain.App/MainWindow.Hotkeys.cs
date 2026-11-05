@@ -1,5 +1,6 @@
 using Curtain.App.Interop;
 using Curtain.App.Localization;
+using Curtain.App.Services;
 using Curtain.Core.Settings;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
@@ -12,6 +13,7 @@ namespace Curtain.App;
 public sealed partial class MainWindow
 {
     private bool _editingHotkey;
+    private Action<GlobalHotkeySettings>? _captureRegisteredHotkey;
 
     private void InitializeSettingDescriptions()
     {
@@ -33,6 +35,10 @@ public sealed partial class MainWindow
     private static string KeyName(uint key) => key switch
     {
         0x20 => "Space",
+        0x25 => "←",
+        0x26 => "↑",
+        0x27 => "→",
+        0x28 => "↓",
         >= 0x70 and <= 0x87 => $"F{key - 0x6F}",
         >= 0x30 and <= 0x39 or >= 0x41 and <= 0x5A => ((char)key).ToString(),
         >= 0x60 and <= 0x69 => $"Num {key - 0x60}",
@@ -67,6 +73,41 @@ public sealed partial class MainWindow
     {
         _privacyHotkey.Apply(_settings.PrivacyHotkey); RefreshPrivacyHotkeyStatus();
     }
+
+    private void ApplyPrivacyMouseButton()
+    {
+        _privacyMouseHook?.Dispose();
+        _privacyMouseHook = null;
+        if (_settings.PrivacyMouseButton == Curtain.Core.Protection.PrivacyMouseButton.Off) return;
+        _privacyMouseHook = new(DispatcherQueue, _settings.PrivacyMouseButton, TogglePrivacyProtection);
+        if (!_privacyMouseHook.IsInstalled)
+            Localized.SetText(StatusText, "PrivacyMouseFailed");
+    }
+
+    private void OnPrivacyMouseChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loadingSettings || PrivacyMouseCombo.SelectedIndex < 0) return;
+        var before = _settings;
+        var selected = (Curtain.Core.Protection.PrivacyMouseButton)PrivacyMouseCombo.SelectedIndex;
+        PrivacyMouseHook? candidate = selected == Curtain.Core.Protection.PrivacyMouseButton.Off
+            ? null : new(DispatcherQueue, selected, TogglePrivacyProtection);
+        string operationId = CurtainDiagnostics.NewOperationId();
+        _settings = before with { PrivacyMouseButton = selected };
+        if (candidate is { IsInstalled: false } || !SaveSettings(operationId))
+        {
+            candidate?.Dispose();
+            _settings = before;
+            _loadingSettings = true;
+            PrivacyMouseCombo.SelectedIndex = (int)before.PrivacyMouseButton;
+            _loadingSettings = false;
+            Localized.SetText(StatusText, "PrivacyMouseFailed");
+            return;
+        }
+        _privacyMouseHook?.Dispose();
+        _privacyMouseHook = candidate;
+        CurtainDiagnostics.Write("settings.preference.changed", operationId: operationId,
+            stage: "PrivacyMouseButton", reasonCode: selected.ToString());
+    }
     private void RefreshPrivacyHotkeyStatus()
     {
         PrivacyHotkeyCapsHost.Children.Clear();
@@ -82,8 +123,6 @@ public sealed partial class MainWindow
         var previous = privacy ? _settings.PrivacyHotkey : _settings.Hotkey;
         var registration = privacy ? _privacyHotkey : _hotkey;
         var proposed = previous;
-        _hotkey.Apply(_settings.Hotkey with { Enabled = false });
-        _privacyHotkey.Apply(_settings.PrivacyHotkey with { Enabled = false });
         var capture = new Button { Content = CreateKeycaps(proposed), MinHeight = 100,
             HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center };
         var hint = new TextBlock { Text = LocalizationService.Get("HotkeyCaptureHint"), TextWrapping = TextWrapping.Wrap };
@@ -95,6 +134,13 @@ public sealed partial class MainWindow
             XamlRoot = Content.XamlRoot, Title = LocalizationService.Get(privacy ? "EditPrivacyHotkey" : "EditHotkey"), Content = content,
             PrimaryButtonText = LocalizationService.Get("SaveHotkey"), SecondaryButtonText = LocalizationService.Get("ResetHotkey"),
             CloseButtonText = LocalizationService.Get("CancelHotkey"), DefaultButton = ContentDialogButton.Primary
+        };
+        _captureRegisteredHotkey = hotkey =>
+        {
+            proposed = hotkey with { Enabled = previous.Enabled };
+            capture.Content = CreateKeycaps(proposed);
+            dialog.IsPrimaryButtonEnabled = true;
+            error.Visibility = Visibility.Collapsed;
         };
         capture.PreviewKeyDown += (_, args) =>
         {
@@ -118,33 +164,56 @@ public sealed partial class MainWindow
         dialog.SecondaryButtonClick += (_, args) =>
         {
             args.Cancel = true;
-            proposed = privacy ? new GlobalHotkeySettings(previous.Enabled, HotkeyModifier.Control | HotkeyModifier.Shift, 0x79) : new GlobalHotkeySettings(previous.Enabled);
+            proposed = (privacy ? new CurtainUserSettings().PrivacyHotkey : new GlobalHotkeySettings()) with { Enabled = previous.Enabled };
             capture.Content = CreateKeycaps(proposed); error.Visibility = Visibility.Collapsed;
             dialog.IsPrimaryButtonEnabled = true; capture.Focus(FocusState.Programmatic);
         };
         dialog.PrimaryButtonClick += (_, args) =>
         {
+            string operationId = CurtainDiagnostics.NewOperationId();
             string? problem = null;
             var other = privacy ? _settings.Hotkey : _settings.PrivacyHotkey;
             if (!CurtainUserSettingsStore.IsValidHotkey(proposed)) problem = LocalizationService.Get("HotkeyInvalid");
             else if (CurtainUserSettingsStore.IsSameShortcut(proposed, other)) problem = LocalizationService.Get("DuplicateHotkeys");
-            else if (!registration.Apply(proposed with { Enabled = true }))
-                problem = LocalizationService.Get("HotkeyRegistrationFailed", DescribeHotkey(proposed), registration.LastError);
+            var before = _settings;
+            bool saved = false;
+            if (problem is null && !registration.TryApply(proposed, () =>
+            {
+                _settings = privacy ? before with { PrivacyHotkey = proposed } : before with { Hotkey = proposed };
+                saved = SaveSettings(operationId);
+                if (!saved) _settings = before;
+                return saved;
+            }))
+            {
+                CurtainDiagnostics.Write("hotkey.registration.failed", CurtainDiagnosticLevel.Warning,
+                    operationId: operationId, stage: privacy ? "privacy-hotkey" : "picker-hotkey",
+                    reasonCode: "RegistrationRejected", errorCode: registration.LastError,
+                    metricName: "VirtualKey", metricValue: proposed.VirtualKey);
+                problem = registration.LastError != 0
+                    ? LocalizationService.Get("HotkeyRegistrationFailed", DescribeHotkey(proposed), registration.LastError)
+                    : LocalizationService.Get("SettingsSaveFailed");
+            }
             if (problem is not null)
             {
                 args.Cancel = true; error.Text = problem; error.Visibility = Visibility.Visible; return;
             }
-            var before = _settings;
-            _settings = privacy ? _settings with { PrivacyHotkey = proposed } : _settings with { Hotkey = proposed };
-            if (SaveSettings()) return;
-            _settings = before; args.Cancel = true;
-            error.Text = LocalizationService.Get("SettingsSaveFailed"); error.Visibility = Visibility.Visible;
-            registration.Apply(previous with { Enabled = false });
+            if (saved)
+            {
+                string settingPrefix = privacy ? "PrivacyHotkey" : "Hotkey";
+                CurtainDiagnostics.Write("settings.preference.changed", operationId: operationId,
+                    stage: settingPrefix + ".Modifiers", reasonCode: "Updated",
+                    metricName: "Modifiers", metricValue: proposed.Modifiers);
+                CurtainDiagnostics.Write("settings.preference.changed", operationId: operationId,
+                    stage: settingPrefix + ".VirtualKey", reasonCode: "Updated",
+                    metricName: "VirtualKey", metricValue: proposed.VirtualKey);
+                return;
+            }
         };
         try { await dialog.ShowAsync(); }
         finally
         {
             _editingHotkey = false;
+            _captureRegisteredHotkey = null;
             if (!_disposed) { ApplyHotkey(); ApplyPrivacyHotkey(); }
         }
     }

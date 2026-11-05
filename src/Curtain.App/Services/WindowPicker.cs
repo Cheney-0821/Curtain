@@ -1,6 +1,7 @@
 using Curtain.App.Interop;
 using Curtain.App.Localization;
 using Curtain.App.Windows;
+using System.Runtime.InteropServices;
 using Curtain.Core.Geometry;
 using Curtain.Core.Selection;
 using Curtain.Core.Sessions;
@@ -22,6 +23,9 @@ internal sealed class WindowPicker : IDisposable
     private bool _f8Down;
     private bool _handoffPending;
     private int _generation;
+    private string? _lastDiagnosticState;
+    private string _operationId = string.Empty;
+    internal string OperationId => _operationId;
     public bool IsActive { get; private set; }
     public event Action<LocalizationMessage>? PreviewChanged;
     public event Func<nint, LocalizationMessage, CurtainSession?>? Finished;
@@ -33,9 +37,13 @@ internal sealed class WindowPicker : IDisposable
         _timer.Interval = TimeSpan.FromMilliseconds(50); _timer.IsRepeating = true;
         _timer.Tick += OnTick;
     }
-    internal void Start()
+    internal void Start(string? operationId = null)
     {
         if (IsActive) return;
+        _operationId = operationId ?? CurtainDiagnostics.NewOperationId();
+        _lastDiagnosticState = null;
+        CurtainDiagnostics.Write("picker.started", operationId: _operationId,
+            stage: "picker-start", reasonCode: "Started");
         _outline = new SelectionOutlineWindow();
         IsActive = true; _candidate = null; _until = DateTime.UtcNow.AddSeconds(45);
         int generation = ++_generation;
@@ -52,22 +60,36 @@ internal sealed class WindowPicker : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    DevelopmentDiagnostics.Write("picker-confirm-error", new { exception = ex.GetType().Name, ex.HResult });
+                    CurtainDiagnostics.WriteException("picker.confirm.failed", ex, operationId: _operationId,
+                        stage: "confirmation-callback", reasonCode: "PickerConfirmationFailed");
                     Stop(0, "PickerConfirmationFailed");
                 }
-            });
+            }, _operationId);
             if (!_hook.IsInstalled)
             {
-                DevelopmentDiagnostics.Write("picker-hook-unavailable", new { _hook.InstallError });
+                CurtainDiagnostics.Write("picker.mouse-hook", CurtainDiagnosticLevel.Warning,
+                    operationId: _operationId, stage: "mouse-hook", reasonCode: "MouseHookUnavailable",
+                    errorCode: _hook.InstallError);
                 _hook.Dispose(); _hook = null;
             }
+            else CurtainDiagnostics.Write("picker.mouse-hook", operationId: _operationId,
+                stage: "mouse-hook", reasonCode: "MouseHookInstalled");
+            CurtainDiagnostics.Write("picker.confirmation-mode", operationId: _operationId,
+                stage: _hook is null ? "f8-fallback" : "mouse-hook",
+                reasonCode: _hook is null ? "F8Enabled" : "MouseClickEnabled");
             _spotlight = new SelectionSpotlightWindow();
             _spotlight.Update(null);
             _timer.Start();
             Preview(_hook is null ? "PickerPromptF8" : "PickerPromptClick");
-            DevelopmentDiagnostics.Write("picker-start", new { safeMouseConfirmation = _hook is not null });
+            CurtainDiagnostics.Write("picker.visuals.created", operationId: _operationId,
+                stage: "outline-spotlight", reasonCode: "Success");
         }
-        catch { Stop(0, "PickerFailedStart"); throw; }
+        catch (Exception ex)
+        {
+            CurtainDiagnostics.WriteException("picker.start.failed", ex, operationId: _operationId,
+                stage: "outline-spotlight", reasonCode: "PickerStartFailed");
+            Stop(0, "PickerFailedStart"); throw;
+        }
     }
     private void OnTick(DispatcherQueueTimer sender, object args)
     {
@@ -86,27 +108,50 @@ internal sealed class WindowPicker : IDisposable
         }
         catch (Exception ex)
         {
-            DevelopmentDiagnostics.Write("picker-error", new { exception = ex.GetType().Name, ex.HResult });
+            CurtainDiagnostics.WriteException("picker.failed", ex, operationId: _operationId,
+                stage: "picker-tick", reasonCode: "PickerFailedSafely");
             Stop(0, "PickerFailedSafely");
         }
     }
-    private nint RootAt(PixelPoint point)
+    private (nint HitWindow, nint RootWindow) RootAt(PixelPoint point)
     {
         nint hit = NativeMethods.WindowFromPoint(new NativeMethods.Point { X = point.X, Y = point.Y });
         nint root = NativeMethods.GetAncestor(hit, NativeMethods.GA_ROOT);
         if (root == _outline?.Handle) root = (nint)(_candidate?.Handle ?? 0);
-        return _manager.ResolveProtectedWindow(root);
+        return (hit, _manager.ResolveProtectedWindow(root));
     }
     private void Update(PixelPoint point)
     {
-        nint root = RootAt(point);
-        if (!NativeMethods.IsSelectableWindow(root) || TargetWindow.Read(root) is not { } identity ||
-            NativeMethods.GetVisibleBounds(root) is not { } bounds)
+        (nint hitWindow, nint root) = RootAt(point);
+        WindowSelectionResult evaluation = WindowSelectionEvaluator.Evaluate(root);
+        if (!evaluation.IsSelectable)
         {
+            RecordCandidateState(root, evaluation.ReasonCode,
+                evaluation.Win32Error != 0 ? evaluation.Win32Error : evaluation.HResult, point, hitWindow);
             _candidate = null; _spotlight?.Update(null); _outline?.Hide();
             Preview(_hook is null ? "PickerMoveF8" : "PickerMoveClick");
             return;
         }
+        if (TargetWindow.Read(root) is not { } identity)
+        {
+            RecordCandidateState(root, "ProcessIdentityUnavailable", 0, point, hitWindow);
+            _candidate = null; _spotlight?.Update(null); _outline?.Hide();
+            Preview(_hook is null ? "PickerMoveF8" : "PickerMoveClick");
+            return;
+        }
+        if (NativeMethods.GetVisibleBounds(root) is not { } bounds)
+        {
+            RecordCandidateState(root, "WindowBoundsUnavailable", Marshal.GetLastPInvokeError(), point, hitWindow);
+            _candidate = null; _spotlight?.Update(null); _outline?.Hide();
+            Preview(_hook is null ? "PickerMoveF8" : "PickerMoveClick");
+            return;
+        }
+        if (_candidate?.Handle != identity.Handle)
+            CurtainDiagnostics.Write("picker.candidate.accepted", operationId: _operationId,
+                stage: "window-from-point-ga-root", reasonCode: "Accepted", hwnd: identity.Handle,
+                windowFromPointHwnd: hitWindow.ToInt64(), targetProcessId: (int)identity.ProcessId,
+                mouseX: point.X, mouseY: point.Y);
+        _lastDiagnosticState = null;
         _candidate = identity;
         int dpi = Math.Max(96, (int)NativeMethods.GetDpiForWindow(root));
         _spotlight?.Update(bounds, dpi);
@@ -116,8 +161,35 @@ internal sealed class WindowPicker : IDisposable
     private void Confirm(PixelPoint point)
     {
         Update(point);
-        if (_candidate is not { } identity || !TargetWindow.Matches(identity)) return;
+        if (_candidate is not { } identity)
+        {
+            CurtainDiagnostics.Write("picker.confirm.rejected", CurtainDiagnosticLevel.Warning,
+                operationId: _operationId, stage: "confirm", reasonCode: "NoSelectableCandidate",
+                mouseX: point.X, mouseY: point.Y);
+            return;
+        }
+        if (!TargetWindow.Matches(identity))
+        {
+            CurtainDiagnostics.Write("picker.confirm.rejected", CurtainDiagnosticLevel.Warning,
+                operationId: _operationId, stage: "confirm", reasonCode: "TargetChangedBeforeConfirm",
+                hwnd: identity.Handle, targetProcessId: (int)identity.ProcessId, mouseX: point.X, mouseY: point.Y);
+            return;
+        }
+        CurtainDiagnostics.Write("picker.confirmed", operationId: _operationId,
+            stage: "confirm", reasonCode: "Success", hwnd: identity.Handle,
+            targetProcessId: (int)identity.ProcessId, mouseX: point.X, mouseY: point.Y);
         Stop((nint)identity.Handle, "PickerConfirmed");
+    }
+
+    private void RecordCandidateState(nint hwnd, string reasonCode, int errorCode, PixelPoint point, nint hitWindow)
+    {
+        string state = $"{hwnd.ToInt64()}:{reasonCode}";
+        if (_lastDiagnosticState == state) return;
+        _lastDiagnosticState = state;
+        CurtainDiagnostics.Write("picker.candidate.rejected", CurtainDiagnosticLevel.Information,
+            operationId: _operationId, stage: "window-from-point-ga-root", reasonCode: reasonCode,
+            hwnd: hwnd.ToInt64(), windowFromPointHwnd: hitWindow.ToInt64(), errorCode: errorCode,
+            mouseX: point.X, mouseY: point.Y);
     }
     private void Preview(string key, params object?[] arguments)
     {
@@ -125,6 +197,8 @@ internal sealed class WindowPicker : IDisposable
         _lastPreview = LocalizationMessage.Create(key, arguments);
         PreviewChanged?.Invoke(_lastPreview);
     }
+    internal void Cancel() { if (IsActive) Stop(0, "PickerCancelled"); }
+
     private void Stop(nint selected, string key)
     {
         bool wasActive = IsActive;
@@ -138,7 +212,8 @@ internal sealed class WindowPicker : IDisposable
         IsActive = handoff;
 
         if (!handoff) ReleaseSelectionVisuals();
-        DevelopmentDiagnostics.Write("picker-ended", new { selected = selected.ToInt64() });
+        CurtainDiagnostics.Write("picker.ended", operationId: _operationId, stage: "picker-stop",
+            reasonCode: key, hwnd: selected.ToInt64());
         bool deferVisualRelease = false;
         try
         {

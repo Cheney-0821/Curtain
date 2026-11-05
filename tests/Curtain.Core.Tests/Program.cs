@@ -1,10 +1,11 @@
-using Curtain.Core;
+﻿using Curtain.Core;
 using Curtain.Core.Geometry;
 using Curtain.Core.Updates;
 using Curtain.Core.Rendering;
 using Curtain.Core.Sessions;
 using Curtain.Core.Selection;
 using Curtain.Core.Settings;
+using Curtain.Core.Protection;
 
 int passed = 0;
 void Check(bool condition, string name)
@@ -211,8 +212,8 @@ try
     var settingsStore = new CurtainUserSettingsStore(settingsDirectory);
     var defaults = settingsStore.Load();
     Check(!defaults.RecoveredFromInvalidFile && !defaults.Settings.StartWithWindows && defaults.Settings.Hotkey.Enabled &&
-          defaults.Settings.Hotkey.VirtualKey == 0x78 && defaults.Settings.AutoDownloadUpdates,
-        "first-run preferences default to disabled startup, Ctrl+Shift+F9, and automatic update downloads");
+          defaults.Settings.Hotkey.VirtualKey == 0x53 && defaults.Settings.Hotkey.Modifiers == HotkeyModifier.Alt && defaults.Settings.AutoDownloadUpdates,
+        "first-run preferences default to disabled startup, Alt+S picker, and automatic update downloads");
     Check(defaults.Settings.BlurPreset == OverlayBlurPreset.Standard && defaults.Settings.Language == AppLanguage.System,
         "blur and language preferences default to Standard and System");
     Check(OverlayBlurPreset.Amount(OverlayBlurPreset.Light) == 2.0f &&
@@ -278,6 +279,14 @@ var b38Directory = Path.Combine(Path.GetTempPath(), "curtain-b38-settings-" + Gu
 try
 {
     var b38Store = new CurtainUserSettingsStore(b38Directory);
+    Check(b38Store.Load().Settings.DiagnosticsEnabled && b38Store.Load().Settings.IncludeRawEtw,
+        "new profiles enable local diagnostics and raw trace attachment by default");
+    b38Store.Save(new CurtainUserSettings { DiagnosticsEnabled = false, IncludeRawEtw = false });
+    Check(!b38Store.Load().Settings.DiagnosticsEnabled && !b38Store.Load().Settings.IncludeRawEtw,
+        "diagnostic opt-out survives the actual settings store");
+    File.WriteAllText(Path.Combine(b38Directory, "settings.json"), "{}");
+    Check(b38Store.Load().Settings.DiagnosticsEnabled && b38Store.Load().Settings.IncludeRawEtw,
+        "legacy settings without diagnostic preferences use enabled defaults");
     var custom = new CurtainUserSettings { AutoProtection = new AutoProtectionSettings(true, 5, AutoProtectionScope.AllDisplays) };
     b38Store.Save(custom);
     Check(b38Store.Load().Settings.AutoProtection == custom.AutoProtection, "idle protection preferences roundtrip");
@@ -325,8 +334,14 @@ Check(CurtainUserSettingsStore.IsValidHotkey(new GlobalHotkeySettings(true, Hotk
 Check(!CurtainUserSettingsStore.IsValidHotkey(new GlobalHotkeySettings(true, HotkeyModifier.Control, 0x7B)),
     "keyboard editor still excludes debugger-reserved F12");
 var legacyHotkeys = System.Text.Json.JsonSerializer.Deserialize<CurtainUserSettings>("{}");
-Check(legacyHotkeys!.PrivacyHotkey.VirtualKey == 0x79 && legacyHotkeys.PrivacyHotkey.Modifiers == (HotkeyModifier.Control | HotkeyModifier.Shift),
-    "legacy settings retain Ctrl Shift F10 privacy shortcut");
+Check(legacyHotkeys!.PrivacyHotkey.VirtualKey == 0x28 && legacyHotkeys.PrivacyHotkey.Modifiers == HotkeyModifier.Control,
+    "missing privacy shortcut uses new Ctrl Down default");
+Check(CurtainUserSettingsStore.IsValidHotkey(legacyHotkeys.PrivacyHotkey), "arrow-key privacy default is valid");
+var explicitlySavedLegacy = System.Text.Json.JsonSerializer.Deserialize<CurtainUserSettings>(
+    "{\"Hotkey\":{\"Enabled\":true,\"Modifiers\":6,\"VirtualKey\":120},\"PrivacyHotkey\":{\"Enabled\":true,\"Modifiers\":6,\"VirtualKey\":121}}");
+Check(explicitlySavedLegacy!.Hotkey.VirtualKey == 0x78 && explicitlySavedLegacy.PrivacyHotkey.VirtualKey == 0x79 &&
+      explicitlySavedLegacy.PrivacyHotkey.Modifiers == (HotkeyModifier.Control | HotkeyModifier.Shift),
+    "explicitly saved old shortcuts remain unchanged");
 Check(!CurtainUserSettingsStore.IsSameShortcut(new GlobalHotkeySettings(true, HotkeyModifier.Control, 0x41),
     new GlobalHotkeySettings(true, HotkeyModifier.Alt, 0x41)), "same key with different modifiers is a distinct shortcut");
 Check(CurtainUserSettingsStore.IsSameShortcut(new GlobalHotkeySettings(false, HotkeyModifier.Control, 0x41),
@@ -335,4 +350,6 @@ var dualShortcutJson = System.Text.Json.JsonSerializer.Serialize(new CurtainUser
     { PrivacyHotkey = new GlobalHotkeySettings(true, HotkeyModifier.Alt | HotkeyModifier.Shift, 0x42) });
 Check(System.Text.Json.JsonSerializer.Deserialize<CurtainUserSettings>(dualShortcutJson)!.PrivacyHotkey.VirtualKey == 0x42,
     "custom privacy shortcut survives serialization");
+passed += ProtectedAppRuleTests.Run();
+passed += FullscreenInteractionTests.Run();
 Console.WriteLine($"OK: {passed} assertions passed.");

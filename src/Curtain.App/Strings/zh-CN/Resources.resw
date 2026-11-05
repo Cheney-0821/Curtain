@@ -1,4 +1,4 @@
-<?xml version='1.0' encoding='utf-8'?>
+﻿<?xml version='1.0' encoding='utf-8'?>
 <root>
   <data name="WindowTitle" xml:space="preserve">
     <value>Curtain · 窗口隐私保护</value>
@@ -148,7 +148,7 @@
     <value>整个桌面（所有显示器）</value>
   </data>
   <data name="AutoProtectionHotkeyHint" xml:space="preserve">
-    <value>Ctrl+Shift+F10：切换全屏保护 / 结束自动保护。</value>
+    <value>使用全屏保护快捷键切换遮罩或结束自动保护。</value>
   </data>
   <data name="HotkeyTitle" xml:space="preserve">
     <value>快捷键</value>
@@ -160,7 +160,7 @@
     <value>按键</value>
   </data>
   <data name="HotkeyInvalid" xml:space="preserve">
-    <value>请使用修饰键搭配字母、数字、空格或 F1～F11。</value>
+    <value>请使用修饰键搭配字母、数字、方向键、空格或 F1～F11。</value>
   </data>
   <data name="HotkeyDisabled" xml:space="preserve">
     <value>快捷键已关闭。</value>
@@ -175,7 +175,7 @@
     <value>{0} 注册失败（错误 {1}），请更改或关闭快捷键。</value>
   </data>
   <data name="PrivacyHotkeyUnavailable" xml:space="preserve">
-    <value>Ctrl+Shift+F10 已被占用，可在首页操作全屏保护。</value>
+    <value>全屏保护快捷键已被占用，请更改组合或在首页操作。</value>
   </data>
   <data name="AboutTitle" xml:space="preserve">
     <value>关于 Curtain</value>
@@ -427,7 +427,7 @@
   <data name="SaveHotkey" xml:space="preserve"><value>保存</value></data>
   <data name="ResetHotkey" xml:space="preserve"><value>重置</value></data>
   <data name="CancelHotkey" xml:space="preserve"><value>取消</value></data>
-  <data name="FollowGlobalDescription" xml:space="preserve"><value>关闭后仅为此窗口单独设置。</value></data>
+  <data name="FollowGlobalDescription" xml:space="preserve"><value>关闭后，为此应用的所有窗口单独设置。</value></data>
   <data name="WebsiteLink" xml:space="preserve"><value>官方网站</value></data>
   <data name="BlurStrengthDescription" xml:space="preserve"><value>轻度保留可读性，重度加强遮挡。</value></data>
   <data name="ClickThroughDescription" xml:space="preserve"><value>直接操作遮罩后的窗口。</value></data>
@@ -436,4 +436,79 @@
   <data name="DuplicateHotkeys" xml:space="preserve"><value>选窗与全屏保护不能使用相同的快捷键。</value></data>
   <data name="ProtectedApplication" xml:space="preserve"><value>应用</value></data>
   <data name="FineTuneBlur" xml:space="preserve"><value>微调</value></data>
+  <data name="NavigationDiagnostics" xml:space="preserve"><value>诊断与反馈</value></data>
+  <data name="WindowAddedNotRemembered" xml:space="preserve"><value>窗口已添加，但无法读取应用身份，未创建记忆规则。</value></data>
+  <data name="RememberedAppsTitle" xml:space="preserve"><value>记住的应用</value></data>
+  <data name="RememberedAppsDescription" xml:space="preserve"><value>应用关闭或电脑重启后，规则仍会保留。应用再次启动时自动添加保护开关，初始保持揭帘。</value></data>
+  <data name="RememberedAppsRemove" xml:space="preserve"><value>移除记忆</value></data>
+  <data name="RememberedAppRemoved" xml:space="preserve"><value>已移除应用记忆规则。</value></data>
+  <data name="RememberedAppActive" xml:space="preserve"><value>已绑定 {0} 个窗口</value></data>
+  <data name="RememberedAppWaiting" xml:space="preserve"><value>等待应用启动</value></data>
+  <data name="DiagnosticsTitle" xml:space="preserve"><value>诊断与反馈</value></data>
+  <data name="DiagnosticsDescription" xml:space="preserve"><value>帮助定位 Curtain 的运行问题。诊断数据默认保存在本机，不会自动上传。</value></data>
+  <data name="DiagnosticsBasicLogsTitle" xml:space="preserve"><value>基础运行日志</value></data>
+  <data name="DiagnosticsBasicLogsDescription" xml:space="preserve"><value>记录运行状态和错误，保存在本机。</value></data>
+  <data name="DiagnosticsAlwaysOn" xml:space="preserve"><value>已启用</value></data>
+  <data name="DiagnosticsIncludeRawEtw" xml:space="preserve"><value>包含原始跟踪文件</value></data>
+  <data name="DiagnosticsEtwTitle" xml:space="preserve"><value>详细诊断记录</value></data>
+  <data name="DiagnosticsEtwDescription" xml:space="preserve"><value>排查窗口与渲染问题，最长记录 30 分钟。</value></data>
+  <data name="DiagnosticsEtwStartFailed" xml:space="preserve"><value>无法启动 ETW 详细记录，请生成诊断包并反馈。</value></data>
+  <data name="DiagnosticsEtwAdministratorRequired" xml:space="preserve"><value>Windows 拒绝创建 ETW 会话。请以管理员身份运行 Curtain 才能开启详细记录；基础日志仍可用。</value></data>
+  <data name="DiagnosticsEtwStarted" xml:space="preserve"><value>ETW 详细记录已启动。</value></data>
+  <data name="DiagnosticsEtwStopped" xml:space="preserve"><value>ETW 详细记录已停止。</value></data>
+  <data name="DiagnosticsEtwStopFailed" xml:space="preserve"><value>ETW 停止失败，系统会继续尝试清理会话。</value></data>
+  <data name="DiagnosticsEtwDuration" xml:space="preserve"><value>本次记录时长：{0}（最长 30 分钟）</value></data>
+  <data name="DiagnosticsEtwTimedOut" xml:space="preserve"><value>详细记录已达到 30 分钟上限并停止。</value></data>
+  <data name="DiagnosticsOpenLogsFolder" xml:space="preserve"><value>打开日志目录</value></data>
+  <data name="DiagnosticsOpenFolderFailed" xml:space="preserve"><value>无法打开日志目录，请检查文件夹权限。</value></data>
+  <data name="DiagnosticsLogsPath" xml:space="preserve"><value>本机日志位置：{0}</value></data>
+  <data name="DiagnosticsBundleLocation" xml:space="preserve"><value>诊断包默认保存到：{0}</value></data>
+  <data name="DiagnosticsBundleTitle" xml:space="preserve"><value>生成诊断包</value></data>
+  <data name="DiagnosticsBundleDescription" xml:space="preserve"><value>将诊断日志打包到桌面。</value></data>
+  <data name="DiagnosticsGenerateBundle" xml:space="preserve"><value>生成诊断包</value></data>
+  <data name="DiagnosticsBundleGenerating" xml:space="preserve"><value>正在生成诊断包…</value></data>
+  <data name="DiagnosticsBundleCreated" xml:space="preserve"><value>诊断包已生成：{0}</value></data>
+  <data name="DiagnosticsBundleFailed" xml:space="preserve"><value>诊断包生成失败，请检查磁盘空间和文件权限。</value></data>
+  <data name="DiagnosticsPrivacyNotice" xml:space="preserve"><value>诊断数据保存在本机，由你选择分享。</value></data>
+  <data name="ApplicationCount" xml:space="preserve"><value>已添加 {0} 个应用</value></data>
+  <data name="ApplicationWindowState" xml:space="preserve"><value>{0} 个窗口 · {1} 个保护中</value></data>
+  <data name="DiagnosticsRawEtwDescription" xml:space="preserve"><value>ETL 可能包含设备名、用户路径、窗口/PID 和坐标，分享前请检查。</value></data>
+  <data name="DiagnosticsRecordingTitle" xml:space="preserve"><value>诊断记录</value></data>
+  <data name="DiagnosticsRecordingDescription" xml:space="preserve"><value>在本机保留最近 24 小时的运行记录。</value></data>
+  <data name="DiagnosticsViewLogs" xml:space="preserve"><value>查看诊断数据</value></data>
+  <data name="FeedbackTitle" xml:space="preserve"><value>问题反馈</value></data>
+  <data name="FeedbackDescription" xml:space="preserve"><value>生成诊断包并反馈问题。</value></data>
+  <data name="FeedbackIssuePlaceholder" xml:space="preserve"><value>问题描述（选填）</value></data>
+  <data name="FeedbackEmailPlaceholder" xml:space="preserve"><value>联系邮箱（选填）</value></data>
+  <data name="FeedbackConsent" xml:space="preserve"><value>我已检查诊断包，同意上传给开发者。</value></data>
+  <data name="FeedbackSubmit" xml:space="preserve"><value>提交反馈</value></data>
+  <data name="FeedbackCancel" xml:space="preserve"><value>取消上传</value></data>
+  <data name="FeedbackCopy" xml:space="preserve"><value>复制编号</value></data>
+  <data name="FeedbackReady" xml:space="preserve"><value>诊断包已生成，请查看后提交。</value></data>
+  <data name="FeedbackUploading" xml:space="preserve"><value>正在上传诊断包…</value></data>
+  <data name="FeedbackDone" xml:space="preserve"><value>反馈已提交。编号：{0}</value></data>
+  <data name="FeedbackTooLarge" xml:space="preserve"><value>ZIP 超过 16 MiB 上限。可取消“包含原始跟踪文件”后重新生成诊断包。</value></data>
+  <data name="FeedbackArchiveMissing" xml:space="preserve"><value>本地诊断包不存在或不可用，请重新生成。</value></data>
+  <data name="FeedbackInvalidEmail" xml:space="preserve"><value>邮箱格式有误。</value></data>
+  <data name="FeedbackInvalidIssue" xml:space="preserve"><value>问题描述过长或包含不支持的字符。</value></data>
+  <data name="FeedbackRateLimited" xml:space="preserve"><value>提交过于频繁，请稍后重试。</value></data>
+  <data name="FeedbackNetwork" xml:space="preserve"><value>网络连接或上传超时，本地 ZIP 已保留，可稍后重试。</value></data>
+  <data name="FeedbackCancelled" xml:space="preserve"><value>上传已取消，本地 ZIP 已保留。</value></data>
+  <data name="FeedbackFailed" xml:space="preserve"><value>上传失败，本地 ZIP 已保留，请稍后重试。</value></data>
+  <data name="FeedbackCopied" xml:space="preserve"><value>编号已复制。</value></data>
+  <data name="FeedbackOpen" xml:space="preserve"><value>反馈问题</value></data>
+  <data name="FeedbackBundleTitle" xml:space="preserve"><value>诊断包</value></data>
+  <data name="FeedbackBundleNotReady" xml:space="preserve"><value>尚未生成</value></data>
+  <data name="FeedbackRegenerate" xml:space="preserve"><value>重新生成</value></data>
+  <data name="FeedbackViewBundle" xml:space="preserve"><value>查看</value></data>
+  <data name="FeedbackClose" xml:space="preserve"><value>关闭</value></data>
+  <data name="FeedbackRequestInvalid" xml:space="preserve"><value>提交格式异常，请重新生成诊断包。</value></data>
+  <data name="FeedbackServiceUnavailable" xml:space="preserve"><value>反馈服务暂时不可用，请稍后重试。</value></data>
+  <data name="FeedbackRequestIdConflict" xml:space="preserve"><value>当前反馈编号已对应另一份诊断包。请重新生成诊断包后再提交。</value></data>
+  <data name="PrivacyMouseHeader" xml:space="preserve"><value>全屏保护侧键</value></data>
+  <data name="PrivacyMouseHint" xml:space="preserve"><value>使用鼠标侧键切换全屏保护。</value></data>
+  <data name="PrivacyMouseOff" xml:space="preserve"><value>关闭</value></data>
+  <data name="PrivacyMouseBack" xml:space="preserve"><value>后退键</value></data>
+  <data name="PrivacyMouseForward" xml:space="preserve"><value>前进键</value></data>
+  <data name="PrivacyMouseFailed" xml:space="preserve"><value>未能启用侧键，原设置已保留。</value></data>
 </root>

@@ -1,4 +1,4 @@
-<?xml version='1.0' encoding='utf-8'?>
+﻿<?xml version='1.0' encoding='utf-8'?>
 <root>
   <data name="WindowTitle" xml:space="preserve">
     <value>Curtain · Window Privacy</value>
@@ -148,7 +148,7 @@
     <value>Entire desktop (all displays)</value>
   </data>
   <data name="AutoProtectionHotkeyHint" xml:space="preserve">
-    <value>Ctrl+Shift+F10: toggle full-screen protection or end automatic protection.</value>
+    <value>Use the full-screen shortcut to toggle protection or end automatic protection.</value>
   </data>
   <data name="HotkeyTitle" xml:space="preserve">
     <value>Keyboard shortcut</value>
@@ -160,7 +160,7 @@
     <value>Key</value>
   </data>
   <data name="HotkeyInvalid" xml:space="preserve">
-    <value>Use a modifier with a letter, number, Space, or F1–F11.</value>
+    <value>Use a modifier with a letter, number, arrow key, Space, or F1–F11.</value>
   </data>
   <data name="HotkeyDisabled" xml:space="preserve">
     <value>Shortcut is disabled.</value>
@@ -175,7 +175,7 @@
     <value>Could not register {0} (error {1}). Choose a different shortcut or turn it off.</value>
   </data>
   <data name="PrivacyHotkeyUnavailable" xml:space="preserve">
-    <value>Ctrl+Shift+F10 is already in use. You can protect the entire screen from Home.</value>
+    <value>The full-screen shortcut is already in use. Change it or use the action on Home.</value>
   </data>
   <data name="AboutTitle" xml:space="preserve">
     <value>About Curtain</value>
@@ -427,7 +427,7 @@
   <data name="SaveHotkey" xml:space="preserve"><value>Save</value></data>
   <data name="ResetHotkey" xml:space="preserve"><value>Reset</value></data>
   <data name="CancelHotkey" xml:space="preserve"><value>Cancel</value></data>
-  <data name="FollowGlobalDescription" xml:space="preserve"><value>Turn off to customize this window independently.</value></data>
+  <data name="FollowGlobalDescription" xml:space="preserve"><value>Turn off to customize all windows of this application.</value></data>
   <data name="WebsiteLink" xml:space="preserve"><value>Website</value></data>
   <data name="BlurStrengthDescription" xml:space="preserve"><value>Keep content readable with light blur, or choose stronger privacy.</value></data>
   <data name="ClickThroughDescription" xml:space="preserve"><value>Interact directly with the window behind the overlay.</value></data>
@@ -436,4 +436,79 @@
   <data name="DuplicateHotkeys" xml:space="preserve"><value>Window picking and full-screen protection must use different shortcuts.</value></data>
   <data name="ProtectedApplication" xml:space="preserve"><value>Application</value></data>
   <data name="FineTuneBlur" xml:space="preserve"><value>Fine-tune</value></data>
+  <data name="NavigationDiagnostics" xml:space="preserve"><value>Diagnostics</value></data>
+  <data name="WindowAddedNotRemembered" xml:space="preserve"><value>Window added, but the application identity could not be read, so no remembered rule was created.</value></data>
+  <data name="RememberedAppsTitle" xml:space="preserve"><value>Remembered apps</value></data>
+  <data name="RememberedAppsDescription" xml:space="preserve"><value>Rules remain after the app or Windows closes. When the app starts again, Curtain restores its protection controls with the overlay initially uncovered.</value></data>
+  <data name="RememberedAppsRemove" xml:space="preserve"><value>Forget app</value></data>
+  <data name="RememberedAppRemoved" xml:space="preserve"><value>Remembered app rule removed.</value></data>
+  <data name="RememberedAppActive" xml:space="preserve"><value>Bound to {0} window(s)</value></data>
+  <data name="RememberedAppWaiting" xml:space="preserve"><value>Waiting for the app</value></data>
+  <data name="DiagnosticsTitle" xml:space="preserve"><value>Diagnostics &amp; feedback</value></data>
+  <data name="DiagnosticsDescription" xml:space="preserve"><value>Help us identify Curtain issues. Diagnostic data stays on this device and is never uploaded automatically.</value></data>
+  <data name="DiagnosticsBasicLogsTitle" xml:space="preserve"><value>Basic runtime logs</value></data>
+  <data name="DiagnosticsBasicLogsDescription" xml:space="preserve"><value>Stores runtime status and errors on this device.</value></data>
+  <data name="DiagnosticsAlwaysOn" xml:space="preserve"><value>Enabled</value></data>
+  <data name="DiagnosticsIncludeRawEtw" xml:space="preserve"><value>Include original trace files</value></data>
+  <data name="DiagnosticsEtwTitle" xml:space="preserve"><value>Detailed diagnostic recording</value></data>
+  <data name="DiagnosticsEtwDescription" xml:space="preserve"><value>Investigate window and rendering issues for up to 30 minutes.</value></data>
+  <data name="DiagnosticsEtwStartFailed" xml:space="preserve"><value>Could not start ETW capture. Generate a diagnostic bundle and share it with us.</value></data>
+  <data name="DiagnosticsEtwAdministratorRequired" xml:space="preserve"><value>Windows denied ETW session creation. Run Curtain as administrator to enable detailed capture; basic logs remain available.</value></data>
+  <data name="DiagnosticsEtwStarted" xml:space="preserve"><value>ETW capture started.</value></data>
+  <data name="DiagnosticsEtwStopped" xml:space="preserve"><value>ETW capture stopped.</value></data>
+  <data name="DiagnosticsEtwStopFailed" xml:space="preserve"><value>ETW capture could not be stopped yet. Curtain will continue trying to clean up the session.</value></data>
+  <data name="DiagnosticsEtwDuration" xml:space="preserve"><value>Capture duration: {0} (30-minute limit)</value></data>
+  <data name="DiagnosticsEtwTimedOut" xml:space="preserve"><value>Detailed capture reached the 30-minute limit and stopped.</value></data>
+  <data name="DiagnosticsOpenLogsFolder" xml:space="preserve"><value>Open log folder</value></data>
+  <data name="DiagnosticsOpenFolderFailed" xml:space="preserve"><value>Could not open the log folder. Check folder permissions.</value></data>
+  <data name="DiagnosticsLogsPath" xml:space="preserve"><value>Local log folder: {0}</value></data>
+  <data name="DiagnosticsBundleLocation" xml:space="preserve"><value>Diagnostic ZIPs are saved to: {0}</value></data>
+  <data name="DiagnosticsBundleTitle" xml:space="preserve"><value>Generate diagnostic bundle</value></data>
+  <data name="DiagnosticsBundleDescription" xml:space="preserve"><value>Save a bundle of diagnostic logs to the desktop.</value></data>
+  <data name="DiagnosticsGenerateBundle" xml:space="preserve"><value>Generate bundle</value></data>
+  <data name="DiagnosticsBundleGenerating" xml:space="preserve"><value>Generating diagnostic bundle…</value></data>
+  <data name="DiagnosticsBundleCreated" xml:space="preserve"><value>Diagnostic bundle created: {0}</value></data>
+  <data name="DiagnosticsBundleFailed" xml:space="preserve"><value>Could not create the diagnostic bundle. Check disk space and file permissions.</value></data>
+  <data name="DiagnosticsPrivacyNotice" xml:space="preserve"><value>Diagnostic data stays on this device. You choose when to share it.</value></data>
+  <data name="ApplicationCount" xml:space="preserve"><value>{0} applications added</value></data>
+  <data name="ApplicationWindowState" xml:space="preserve"><value>{0} windows · {1} protected</value></data>
+  <data name="DiagnosticsRawEtwDescription" xml:space="preserve"><value>ETL may include device/profile names, window/PID data and coordinates. Review before sharing.</value></data>
+  <data name="DiagnosticsRecordingTitle" xml:space="preserve"><value>Diagnostic recording</value></data>
+  <data name="DiagnosticsRecordingDescription" xml:space="preserve"><value>Keep the last 24 hours of activity logs on this device.</value></data>
+  <data name="DiagnosticsViewLogs" xml:space="preserve"><value>View diagnostic data</value></data>
+  <data name="FeedbackTitle" xml:space="preserve"><value>Feedback</value></data>
+  <data name="FeedbackDescription" xml:space="preserve"><value>Send feedback with a diagnostic bundle.</value></data>
+  <data name="FeedbackIssuePlaceholder" xml:space="preserve"><value>Problem description (optional)</value></data>
+  <data name="FeedbackEmailPlaceholder" xml:space="preserve"><value>Contact email (optional)</value></data>
+  <data name="FeedbackConsent" xml:space="preserve"><value>I have reviewed the bundle and agree to send it to the developer.</value></data>
+  <data name="FeedbackSubmit" xml:space="preserve"><value>Submit feedback</value></data>
+  <data name="FeedbackCancel" xml:space="preserve"><value>Cancel upload</value></data>
+  <data name="FeedbackCopy" xml:space="preserve"><value>Copy ID</value></data>
+  <data name="FeedbackReady" xml:space="preserve"><value>Bundle ready. Review it before submitting.</value></data>
+  <data name="FeedbackUploading" xml:space="preserve"><value>Uploading diagnostic ZIP…</value></data>
+  <data name="FeedbackDone" xml:space="preserve"><value>Feedback submitted. ID: {0}</value></data>
+  <data name="FeedbackTooLarge" xml:space="preserve"><value>ZIP exceeds the 16 MiB limit. Deselect “Include original trace files” and generate a new bundle.</value></data>
+  <data name="FeedbackArchiveMissing" xml:space="preserve"><value>The local diagnostic ZIP is missing or invalid. Generate it again.</value></data>
+  <data name="FeedbackInvalidEmail" xml:space="preserve"><value>Invalid email address.</value></data>
+  <data name="FeedbackInvalidIssue" xml:space="preserve"><value>Description is too long or contains unsupported characters.</value></data>
+  <data name="FeedbackRateLimited" xml:space="preserve"><value>Too many submissions. Please try again later.</value></data>
+  <data name="FeedbackNetwork" xml:space="preserve"><value>Network error or timeout. The local ZIP is preserved; try again later.</value></data>
+  <data name="FeedbackCancelled" xml:space="preserve"><value>Upload cancelled. The local ZIP is preserved.</value></data>
+  <data name="FeedbackFailed" xml:space="preserve"><value>Upload failed. The local ZIP is preserved; please retry.</value></data>
+  <data name="FeedbackCopied" xml:space="preserve"><value>ID copied.</value></data>
+  <data name="FeedbackOpen" xml:space="preserve"><value>Send feedback</value></data>
+  <data name="FeedbackBundleTitle" xml:space="preserve"><value>Diagnostic bundle</value></data>
+  <data name="FeedbackBundleNotReady" xml:space="preserve"><value>Not generated</value></data>
+  <data name="FeedbackRegenerate" xml:space="preserve"><value>Regenerate</value></data>
+  <data name="FeedbackViewBundle" xml:space="preserve"><value>View</value></data>
+  <data name="FeedbackClose" xml:space="preserve"><value>Close</value></data>
+  <data name="FeedbackRequestInvalid" xml:space="preserve"><value>Submission format error. Generate a new bundle.</value></data>
+  <data name="FeedbackServiceUnavailable" xml:space="preserve"><value>Feedback service is unavailable. Please try again later.</value></data>
+  <data name="FeedbackRequestIdConflict" xml:space="preserve"><value>This feedback ID is already associated with a different ZIP. Generate a new diagnostic bundle and submit again.</value></data>
+  <data name="PrivacyMouseHeader" xml:space="preserve"><value>Full-screen mouse shortcut</value></data>
+  <data name="PrivacyMouseHint" xml:space="preserve"><value>Toggle full-screen protection with a mouse side button.</value></data>
+  <data name="PrivacyMouseOff" xml:space="preserve"><value>Off</value></data>
+  <data name="PrivacyMouseBack" xml:space="preserve"><value>Back button</value></data>
+  <data name="PrivacyMouseForward" xml:space="preserve"><value>Forward button</value></data>
+  <data name="PrivacyMouseFailed" xml:space="preserve"><value>Unable to enable the side button. Your previous setting is unchanged.</value></data>
 </root>

@@ -13,10 +13,10 @@
   <img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-0078D4?style=flat-square" />
   <img alt="WinUI 3" src="https://img.shields.io/badge/WinUI-3-536DFE?style=flat-square" />
   <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-6A4C93?style=flat-square" />
-  <img alt="Beta 0.2.0-beta.5.5" src="https://img.shields.io/badge/release-beta.5.5-64748b?style=flat-square" />
+  <img alt="Beta 0.2.0-beta.6" src="https://img.shields.io/badge/release-beta.6-64748b?style=flat-square" />
 </p>
 
-**[下载 Windows 测试版](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.2.0-beta.5.5-Setup.exe)** · **[GitHub 发布页](https://github.com/Cheney-0821/Curtain/releases/tag/v0.2.0-beta.5.5)** · **[English](README.md)**
+**[下载 Windows 测试版](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.2.0-beta.6-Setup.exe)** · **[GitHub 发布页](https://github.com/Cheney-0821/Curtain/releases/tag/v0.2.0-beta.6)** · **[English](README.md)**
 
 <sub>Windows x64 · 安装包尚未进行代码签名 · 已在 Windows 11 测试</sub>
 
@@ -79,11 +79,15 @@ Curtain 可以根据键盘、鼠标的无操作时长自动开启保护。**什�
 - **空闲自动保护：** 在自动保护期间临时恢复某个窗口，下一次再次达到空闲时长会重新遮挡它。
 - **更新不打扰：** 后台自动检查和下载更新，安装与重启由你确认。
 - **最小化更顺手：** 最小化后保留在任务栏，点击关闭仍会收至系统托盘。
+- **记住常用应用：** 保存应用保护规则，Curtain 或 Windows 重启后仍保留；应用再次启动时自动重新绑定匹配窗口。
+- **诊断与反馈：** 保留本地诊断记录，按需生成并主动提交诊断包；上传失败时 ZIP 仍保留在本机。
+- **全屏控件：** 鼠标移到屏幕上方四分之一区域可唤出恢复按钮；离开该区域或静止 1 秒后淡出。
+- **自定义快捷键：** 全屏保护默认使用 `Ctrl+↓`，选窗默认使用 `Alt+S`，两者都可修改。鼠标后退/前进键可选作全屏开关，默认关闭。
 - **原生 Windows 风格：** 使用 WinUI 3 与 Windows App SDK 构建。
 
 ## 安装与使用
 
-1. 从上方下载 [Windows x64 测试版安装程序](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.2.0-beta.5.5-Setup.exe)。安装包目前**未签名**，Windows 可能提示未知发布者；请核实来源，不要为了安装关闭系统安全防护。
+1. 从上方下载 [Windows x64 测试版安装程序](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.2.0-beta.6-Setup.exe)。安装包目前**未签名**，Windows 可能提示未知发布者；请核实来源，不要为了安装关闭系统安全防护。
 2. 启动 Curtain，选择「添加窗口」或「保护整个屏幕」。
 3. 如需离开工位后自动保护，在「设置」中开启空闲自动保护并选择时长及范围。
 
@@ -94,8 +98,10 @@ Curtain 可以根据键盘、鼠标的无操作时长自动开启保护。**什�
 
 | 快捷键 | 作用 |
 |---|---|
-| <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>F9</kbd> | 进入选择窗口模式 |
-| <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>F10</kbd> | 切换全屏保护，或结束当前自动保护会话 |
+| <kbd>Ctrl</kbd> + <kbd>↓</kbd> | 切换全屏保护，或结束当前自动保护会话 |
+| <kbd>Alt</kbd> + <kbd>S</kbd> | 开始选择窗口 |
+
+两组快捷键均可自定义。鼠标后退/前进键可选作全屏保护开关，默认关闭。已保存的应用规则会持续保留，应用再次启动时重新绑定窗口；运行中的窗口列表则根据当前运行的应用重建。
 
 Curtain 面向 Windows x64。项目最低目标为 Windows 10 2004（build 19041），但尚未进行独立的 Windows 10 实机兼容测试；目前主要在 Windows 11 环境下开发和测试。
 
@@ -103,13 +109,13 @@ Curtain 面向 Windows x64。项目最低目标为 Windows 10 2004（build 19041
 
 ## 使用边界
 
-Curtain 是一种**视觉隐私遮罩**，并非 Windows 系统锁屏、安全防线，也不能阻止其他程序截图或录屏。部分系统通知或短暂弹窗仍可能在全屏磨砂层级恢复前短暂显示在其上方。受保护应用窗口支持调节高斯模糊强度；全屏保护继续使用现有 Acrylic 材质。退出并重新启动 Curtain 后，已添加的运行中窗口列表不会自动恢复。
+Curtain 是一种**视觉隐私遮罩**，并非 Windows 系统锁屏、安全防线，也不能阻止其他程序截图或录屏。部分系统通知或短暂弹窗仍可能在全屏磨砂层级恢复前短暂显示在其上方。标准用户会话下的原生 ETW 跟踪可能需要管理员权限，目前尚未验证成功。Windows 10、混合 DPI、显示器热插拔及复杂多屏环境尚未完成独立实机专项验证；目前主要在 Windows 11 上测试。
 
 ## 反馈与开源
 
 Curtain 源码已在 GitHub 公开，并采用 **GPL-3.0-only** 许可证。欢迎通过 [GitHub Issues](https://github.com/Cheney-0821/Curtain/issues) 报告问题或提出改进建议。
 
-当前测试版安装包与应用内更新源由上方官方更新域名提供。请查看 [GitHub 发布页](https://github.com/Cheney-0821/Curtain/releases/tag/v0.2.0-beta.5.5) 获取版本说明、源码提交 SHA、安装包 SHA-256，以及 GitHub 镜像下载。
+当前测试版安装包与应用内更新源由上方官方更新域名提供。请查看 [GitHub 发布页](https://github.com/Cheney-0821/Curtain/releases/tag/v0.2.0-beta.6) 获取版本说明、源码提交 SHA、安装包 SHA-256，以及 GitHub 镜像下载。
 
 ## 许可
 

@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Curtain.App.Interop;
@@ -31,6 +31,10 @@ internal sealed class CurtainWindow
     private readonly DispatcherQueue _dispatcher;
     private readonly long _protectedWindowHandle;
     private readonly uint _protectedProcessId;
+    private readonly string _operationId;
+    private readonly string _sessionId;
+    private string? _ruleId;
+    internal void AssociateRememberedRule(string ruleId) => _ruleId = ruleId;
     private bool _disposed, _desiredVisible, _running, _firstPaintQueued, _firstFramePresented;
     private bool? _lastMaximized;
     private Action? _firstFrameCallback;
@@ -39,7 +43,9 @@ internal sealed class CurtainWindow
     private long _started;
     private bool _pendingShow;
     private int _showGeneration, _warmupTicks;
+    private int _pendingBackdropGeneration;
     internal event Action? RenderFailed;
+    internal event Action? FirstFramePresented;
     public nint Handle { get; }
     public bool HasSurfaceCapture => GetCapture() == Handle;
     internal bool IsVisible => NativeMethods.IsWindowVisible(Handle);
@@ -47,11 +53,15 @@ internal sealed class CurtainWindow
     public event Action<PixelPoint>? SurfaceMoved;
     public event Action? SurfaceEnded;
 
-    public CurtainWindow(DispatcherQueue dispatcher, long protectedWindowHandle, uint protectedProcessId)
+    public CurtainWindow(DispatcherQueue dispatcher, long protectedWindowHandle, uint protectedProcessId,
+        string operationId, string sessionId, string? ruleId)
     {
         _dispatcher = dispatcher;
         _protectedWindowHandle = protectedWindowHandle;
         _protectedProcessId = protectedProcessId;
+        _operationId = operationId;
+        _sessionId = sessionId;
+        _ruleId = ruleId;
         dispatcher.EnsureSystemDispatcherQueue();
         if (!_registered)
         {
@@ -81,6 +91,10 @@ internal sealed class CurtainWindow
             _factory = _compositor.CreateEffectFactory(blur, new[] { "Blur.BlurAmount" });
             _effect = _factory.CreateBrush(); _effect.SetSourceParameter("Source", _backdrop);
             _visual.Brush = _effect; _target.Root = _visual;
+        CurtainDiagnostics.Write("overlay.render.initialized", operationId: _operationId,
+            stage: "composition-backdrop", reasonCode: "Success", hwnd: Handle.ToInt64(),
+            ownerHwnd: _protectedWindowHandle, targetProcessId: (int)protectedProcessId,
+            sessionId: _sessionId, ruleId: _ruleId);
             _input = new OverlayOpacityFade(Handle, dispatcher);
             _messages = new WindowMessageHost(Handle); _messages.AfterMessage += OnMessage;
             _timer = dispatcher.CreateTimer(); _timer.Interval = TimeSpan.FromMilliseconds(16); _timer.IsRepeating = true;
@@ -100,9 +114,21 @@ internal sealed class CurtainWindow
         if (_disposed) return false;
         if (settings == _settings) return true;
         double previousAmount = _settings.BlurAmount;
+        bool previousClickThrough = _settings.AllowClickThrough;
         if (settings.AllowClickThrough) ReleaseSurfaceCapture();
         _input.SetPointerPassthrough(settings.AllowClickThrough);
         _settings = settings; ApplyBlur();
+        CurtainDiagnostics.Write("overlay.blur.configured", operationId: _operationId,
+            stage: "composition-gaussian", reasonCode: "Success", hwnd: Handle.ToInt64(),
+            ownerHwnd: _protectedWindowHandle, targetProcessId: (int)_protectedProcessId,
+            metricName: "BlurAmount", metricValue: settings.BlurAmount,
+            sessionId: _sessionId, ruleId: _ruleId);
+        if (previousClickThrough != settings.AllowClickThrough)
+            CurtainDiagnostics.Write("overlay.input-mode.applied", operationId: _operationId,
+                stage: "overlay-input", reasonCode: settings.AllowClickThrough ? "ClickThroughEnabled" : "ClickThroughDisabled",
+                hwnd: Handle.ToInt64(), ownerHwnd: _protectedWindowHandle,
+                targetProcessId: (int)_protectedProcessId, metricName: "AllowClickThrough",
+                metricValue: settings.AllowClickThrough ? 1 : 0, sessionId: _sessionId, ruleId: _ruleId);
         if (IsVisible && !_running && Math.Abs(previousAmount - settings.BlurAmount) >= 2)
         {
             using var transition = _compositor.CreateScalarKeyFrameAnimation();
@@ -121,7 +147,20 @@ internal sealed class CurtainWindow
     internal void SetProtectedVisible(bool visible, bool animate, long? batchStart = null)
     {
         if (_disposed || (_desiredVisible == visible && (_running || _pendingShow || IsVisible == visible))) return;
+        CurtainDiagnostics.Write("overlay.visibility.requested", operationId: _operationId,
+            stage: "window-protection",
+            reasonCode: visible ? (animate ? "ShowAnimated" : "ShowImmediate") : (animate ? "HideAnimated" : "HideImmediate"),
+            hwnd: Handle.ToInt64(), ownerHwnd: _protectedWindowHandle,
+            targetProcessId: (int)_protectedProcessId, metricName: "BlurAmount", metricValue: _settings.BlurAmount,
+            sessionId: _sessionId, ruleId: _ruleId);
+        bool wasAnimating = _running;
         if (_running) Tick();
+        if (wasAnimating && _running)
+            CurtainDiagnostics.Write("overlay.animation.cancelled", CurtainDiagnosticLevel.Trace,
+                operationId: _operationId, stage: "opacity-ramp", reasonCode: "SupersededByVisibilityRequest",
+                hwnd: Handle.ToInt64(), ownerHwnd: _protectedWindowHandle,
+                targetProcessId: (int)_protectedProcessId, sessionId: _sessionId, ruleId: _ruleId);
+        if (_pendingShow) LogBackdropRefreshCancelled(_pendingBackdropGeneration, "SupersededByVisibilityRequest");
         _desiredVisible = visible;
         int generation = ++_showGeneration;
         _pendingShow = false; _warmupTicks = 0;
@@ -132,6 +171,11 @@ internal sealed class CurtainWindow
             _ramp = 0; _visual.Opacity = 0.001f;
             RefreshBackdropInput();
             ApplyBlur();
+            _pendingBackdropGeneration = generation;
+            CurtainDiagnostics.Write("overlay.backdrop.refresh.started", CurtainDiagnosticLevel.Information,
+                operationId: _operationId, stage: "fresh-input-frame", reasonCode: "AwaitCommit",
+                hwnd: Handle.ToInt64(), ownerHwnd: _protectedWindowHandle,
+                targetProcessId: (int)_protectedProcessId, sessionId: _sessionId, ruleId: _ruleId);
             _ = ShowFreshBackdropAsync(generation, animate);
             return;
         }
@@ -139,13 +183,24 @@ internal sealed class CurtainWindow
         if (!animate)
         {
             _ramp = visible ? 255 : 0; ApplyBlur(); NativeMethods.ShowWindow(Handle, visible ? 4 : 0);
-            _timer.Stop(); _running = false; return;
+            _timer.Stop(); _running = false;
+            CurtainDiagnostics.Write("overlay.visibility.completed", operationId: _operationId,
+                stage: "window-protection",
+                reasonCode: NativeMethods.IsWindowVisible(Handle) == visible ? "Success" : "VisibilityMismatch",
+                hwnd: Handle.ToInt64(), ownerHwnd: _protectedWindowHandle,
+                targetProcessId: (int)_protectedProcessId, sessionId: _sessionId, ruleId: _ruleId);
+            return;
         }
         _from = _ramp; _to = visible ? 255 : 0;
         _duration = OverlayFadeCurve.DurationFor(_from, _to);
         _started = batchStart ?? Stopwatch.GetTimestamp(); ApplyBlur();
         if (visible) NativeMethods.ShowWindow(Handle, 4);
         _running = true; _timer.Start();
+        CurtainDiagnostics.Write("overlay.animation.started", operationId: _operationId,
+            stage: "opacity-ramp", reasonCode: visible ? "Opening" : "Closing",
+            hwnd: Handle.ToInt64(), ownerHwnd: _protectedWindowHandle,
+            targetProcessId: (int)_protectedProcessId, metricName: "DurationMilliseconds", metricValue: _duration,
+            sessionId: _sessionId, ruleId: _ruleId);
     }
     private void RefreshBackdropInput()
     {
@@ -163,30 +218,51 @@ internal sealed class CurtainWindow
         {
             // Submit the new input/hidden visual before exposing the native HWND.
             await _compositor.RequestCommitAsync().AsTask().WaitAsync(TimeSpan.FromMilliseconds(250));
-            if (_disposed || generation != _showGeneration || !_desiredVisible) return;
+            if (_disposed || generation != _showGeneration || !_desiredVisible)
+            {
+                LogBackdropRefreshCancelled(generation,
+                    _disposed ? "Disposed" : !_desiredVisible ? "VisibilityNoLongerRequested" : "Superseded");
+                return;
+            }
+            _pendingBackdropGeneration = 0;
+            CurtainDiagnostics.Write("overlay.backdrop.refresh.completed", operationId: _operationId,
+                stage: "fresh-input-frame", reasonCode: "CommitCompleted", hwnd: Handle.ToInt64(),
+                ownerHwnd: _protectedWindowHandle, targetProcessId: (int)_protectedProcessId,
+                sessionId: _sessionId, ruleId: _ruleId);
             _pendingShow = false;
             if (!animate)
             {
                 _ramp = 255; ApplyBlur(); _visual.Opacity = 1; NativeMethods.ShowWindow(Handle, 4);
+                CurtainDiagnostics.Write("overlay.visibility.completed", operationId: _operationId,
+                    stage: "fresh-input-frame",
+                    reasonCode: NativeMethods.IsWindowVisible(Handle) ? "Success" : "VisibilityMismatch",
+                    hwnd: Handle.ToInt64(), ownerHwnd: _protectedWindowHandle,
+                    targetProcessId: (int)_protectedProcessId, sessionId: _sessionId, ruleId: _ruleId);
                 return;
             }
             _from = 0; _to = 255; _duration = OverlayFadeCurve.FullDurationMs;
             _started = Stopwatch.GetTimestamp(); _warmupTicks = 2;
             NativeMethods.ShowWindow(Handle, 4); _running = true; _timer.Start();
-            DevelopmentDiagnostics.Write("backdrop-input-refreshed", new { generation });
+            CurtainDiagnostics.Write("overlay.animation.started", operationId: _operationId,
+                stage: "fresh-input-frame", reasonCode: "Opening", hwnd: Handle.ToInt64(),
+                ownerHwnd: _protectedWindowHandle, targetProcessId: (int)_protectedProcessId,
+                metricName: "DurationMilliseconds", metricValue: _duration, sessionId: _sessionId, ruleId: _ruleId);
         }
         catch (Exception ex)
         {
-            if (_disposed || generation != _showGeneration) return;
-            _pendingShow = false;
-            DevelopmentDiagnostics.Write("backdrop-refresh-failed", new
+            if (_disposed || generation != _showGeneration)
             {
-                targetWindow = _protectedWindowHandle,
-                targetProcessId = _protectedProcessId,
-                overlayWindow = Handle.ToInt64(),
-                exception = ex.GetType().Name,
-                ex.HResult
-            });
+                LogBackdropRefreshCancelled(generation,
+                    _disposed ? "Disposed" : !_desiredVisible ? "VisibilityNoLongerRequested" : "SupersededAfterFailure");
+                return;
+            }
+            bool refreshPending = _pendingBackdropGeneration == generation;
+            _pendingBackdropGeneration = 0;
+            _pendingShow = false;
+            CurtainDiagnostics.WriteException(refreshPending ? "overlay.backdrop.refresh.failed" : "overlay.visibility.failed", ex,
+                operationId: _operationId, stage: "fresh-input-frame", reasonCode: "CommitOrShowFailed",
+                hwnd: Handle.ToInt64(), ownerHwnd: _protectedWindowHandle,
+                targetProcessId: (int)_protectedProcessId, sessionId: _sessionId, ruleId: _ruleId);
             RenderFailed?.Invoke();
         }
     }
@@ -203,14 +279,46 @@ internal sealed class CurtainWindow
         if (elapsed < _duration) return;
         _running = false; _timer.Stop();
         if (!_desiredVisible) NativeMethods.ShowWindow(Handle, 0);
+        CurtainDiagnostics.Write("overlay.animation.completed", operationId: _operationId,
+            stage: "opacity-ramp",
+            reasonCode: NativeMethods.IsWindowVisible(Handle) == _desiredVisible ? "Success" : "VisibilityMismatch",
+            hwnd: Handle.ToInt64(), ownerHwnd: _protectedWindowHandle,
+            targetProcessId: (int)_protectedProcessId, metricName: "BlurAmount", metricValue: _settings.BlurAmount,
+            sessionId: _sessionId, ruleId: _ruleId);
     }
     internal void CancelAndHide()
     {
         if (_disposed) return;
+        bool wasPending = _pendingShow;
+        bool wasRunning = _running;
+        bool wasActive = wasPending || wasRunning || _desiredVisible || NativeMethods.IsWindowVisible(Handle);
+        if (wasPending) LogBackdropRefreshCancelled(_pendingBackdropGeneration, "ImmediateHide");
+        if (wasRunning)
+            CurtainDiagnostics.Write("overlay.animation.cancelled", CurtainDiagnosticLevel.Trace,
+                operationId: _operationId, stage: "opacity-ramp", reasonCode: "ImmediateHide",
+                hwnd: Handle.ToInt64(), ownerHwnd: _protectedWindowHandle,
+                targetProcessId: (int)_protectedProcessId, sessionId: _sessionId, ruleId: _ruleId);
         ++_showGeneration; _pendingShow = false; _warmupTicks = 0;
         _timer.Stop(); _running = _desiredVisible = false; _ramp = 0;
         NativeMethods.ShowWindow(Handle, 0); _visual.Opacity = 1; ReleaseSurfaceCapture();
+        bool stillVisible = NativeMethods.IsWindowVisible(Handle);
+        if (wasActive || stillVisible)
+            CurtainDiagnostics.Write("overlay.hidden", operationId: _operationId,
+                stage: "window-overlay", reasonCode: "Immediate", hwnd: Handle.ToInt64(),
+                ownerHwnd: _protectedWindowHandle, targetProcessId: (int)_protectedProcessId,
+                errorCode: stillVisible ? Marshal.GetLastPInvokeError() : 0,
+                sessionId: _sessionId, ruleId: _ruleId);
     }
+    private void LogBackdropRefreshCancelled(int generation, string reasonCode)
+    {
+        if (generation == 0 || generation != _pendingBackdropGeneration) return;
+        _pendingBackdropGeneration = 0;
+        CurtainDiagnostics.Write("overlay.backdrop.refresh.cancelled", CurtainDiagnosticLevel.Trace,
+            operationId: _operationId, stage: "fresh-input-frame", reasonCode: reasonCode,
+            hwnd: Handle.ToInt64(), ownerHwnd: _protectedWindowHandle,
+            targetProcessId: (int)_protectedProcessId, sessionId: _sessionId, ruleId: _ruleId);
+    }
+
     private void OnMessage(uint message, nint wParam, nint lParam)
     {
         if (_disposed) return;
@@ -234,7 +342,9 @@ internal sealed class CurtainWindow
     }
     private void NotifyFirstFrame()
     {
+        if (_firstFramePresented) return;
         _firstFramePresented = true;
+        FirstFramePresented?.Invoke();
         var callback = _firstFrameCallback; _firstFrameCallback = null; callback?.Invoke();
     }
     public void ReleaseSurfaceCapture()

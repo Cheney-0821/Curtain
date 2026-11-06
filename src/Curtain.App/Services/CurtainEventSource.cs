@@ -19,7 +19,7 @@ public sealed class CurtainEventSource : EventSource
         public const EventKeywords Diagnostics = (EventKeywords)1;
     }
 
-    [Event(1, Level = EventLevel.Informational, Keywords = Keywords.Diagnostics)]
+    [Event(1, Version = 2, Level = EventLevel.Informational, Keywords = Keywords.Diagnostics)]
     public void DiagnosticRecord(
         string eventName,
         string level,
@@ -42,7 +42,14 @@ public sealed class CurtainEventSource : EventSource
         double metricValue,
         string processName,
         string sessionId,
-        string ruleId)
+        string ruleId,
+        string productVersion,
+        string fileVersion,
+        string gitCommit,
+        string buildId,
+        string appSessionId,
+        string appSessionStartedAtUtc,
+        int applicationProcessId)
     {
         if (IsEnabled())
             WriteEvent(1, new object?[]
@@ -50,7 +57,8 @@ public sealed class CurtainEventSource : EventSource
                 eventName, level, operationId, stage, reasonCode, hwnd, windowFromPointHwnd,
                 ownerHwnd, relatedHwnd, targetProcessId, errorCode,
                 left, top, width, height, mouseX, mouseY, metricName, metricValue,
-                processName, sessionId, ruleId
+                processName, sessionId, ruleId, productVersion, fileVersion, gitCommit, buildId,
+                appSessionId, appSessionStartedAtUtc, applicationProcessId
             });
     }
 

@@ -20,7 +20,7 @@ internal static class EventViewerCollector
 {
     private const int MaximumOutputCharacters = 8 * 1024 * 1024;
     private const int MaximumMatchingEvents = 30;
-    private static readonly Regex HexCode = new("^0x[0-9a-fA-F]{1,16}$", RegexOptions.Compiled);
+    private static readonly Regex HexCode = new("^(?:0x)?[0-9a-fA-F]{1,16}$", RegexOptions.Compiled);
     private static readonly Regex Version = new("^[0-9]{1,6}(\\.[0-9]{1,6}){1,3}$", RegexOptions.Compiled);
     private static readonly Regex SafeBaseName = new("^[A-Za-z0-9_.-]{1,128}$", RegexOptions.Compiled);
 
@@ -53,23 +53,8 @@ internal static class EventViewerCollector
             string output = result.Output;
             if (string.IsNullOrWhiteSpace(output)) return new(true, null, 0, "NoApplicationErrors");
 
-            int declarationEnd = output.IndexOf("?>", StringComparison.Ordinal);
-            if (output.TrimStart().StartsWith("<?xml", StringComparison.OrdinalIgnoreCase) && declarationEnd >= 0)
-                output = output[(declarationEnd + 2)..];
-            string trimmed = output.Trim();
-            XDocument source = trimmed.StartsWith("<Events", StringComparison.OrdinalIgnoreCase)
-                ? XDocument.Parse(trimmed, LoadOptions.None)
-                : XDocument.Parse("<Events>" + output + "</Events>", LoadOptions.None);
-            XElement[] events = source.Root!.DescendantsAndSelf()
-                .Where(element => element.Name.LocalName == "Event")
-                .Where(IsCurtainCrash)
-                .Take(MaximumMatchingEvents)
-                .Select(NormalizeEvent)
-                .ToArray();
-            if (events.Length == 0) return new(true, null, 0, "NoCurtainApplicationErrors");
-
-            string xml = new XElement("CurtainApplicationErrors", events).ToString(SaveOptions.DisableFormatting);
-            return new(true, xml, events.Length, "Success");
+            return Parse(output, AppDiagnosticSession.Current.AppSessionStartedAtUtc,
+                AppDiagnosticSession.Current.ApplicationProcessId);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
                                    InvalidOperationException or System.ComponentModel.Win32Exception or
@@ -79,6 +64,27 @@ internal static class EventViewerCollector
                 stage: "wevtutil", reasonCode: "EventViewerCollectionFailed");
             return new(false, null, 0, ex.GetType().Name);
         }
+    }
+
+    internal static EventViewerCollectionResult Parse(string output, DateTimeOffset sessionStart, int currentProcessId)
+    {
+        int declarationEnd = output.IndexOf("?>", StringComparison.Ordinal);
+        if (output.TrimStart().StartsWith("<?xml", StringComparison.OrdinalIgnoreCase) && declarationEnd >= 0)
+            output = output[(declarationEnd + 2)..];
+        string trimmed = output.Trim();
+        XDocument source = trimmed.StartsWith("<Events", StringComparison.OrdinalIgnoreCase)
+            ? XDocument.Parse(trimmed, LoadOptions.None)
+            : XDocument.Parse("<Events>" + output + "</Events>", LoadOptions.None);
+        XElement[] events = source.Root!.DescendantsAndSelf()
+            .Where(element => element.Name.LocalName == "Event")
+            .Where(IsCurtainCrash)
+            .Take(MaximumMatchingEvents)
+            .Select(element => NormalizeEvent(element, sessionStart, currentProcessId))
+            .ToArray();
+        if (events.Length == 0) return new(true, null, 0, "NoCurtainApplicationErrors");
+
+        string xml = new XElement("CurtainApplicationErrors", events).ToString(SaveOptions.DisableFormatting);
+        return new(true, xml, events.Length, "Success");
     }
 
     private static bool IsCurtainCrash(XElement eventElement)
@@ -95,7 +101,7 @@ internal static class EventViewerCollector
                             element.Value.Contains("Curtain.exe", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static XElement NormalizeEvent(XElement source)
+    private static XElement NormalizeEvent(XElement source, DateTimeOffset sessionStart, int currentProcessId)
     {
         XElement? system = Child(source, "System");
         string provider = Child(system, "Provider")?.Attribute("Name")?.Value ?? "Unknown";
@@ -109,7 +115,7 @@ internal static class EventViewerCollector
             new XAttribute("eventId", eventId));
         if (DateTimeOffset.TryParse(timestamp, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out DateTimeOffset time))
             normalized.Add(new XAttribute("timeUtc", time.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture)));
-        AddNumericAttribute(normalized, "processId", processId);
+        AddNumericAttribute(normalized, "eventWriterProcessId", processId);
         AddNumericAttribute(normalized, "threadId", threadId);
 
         string? executable = FindExecutableName(source);
@@ -119,16 +125,41 @@ internal static class EventViewerCollector
             string name = data.Attribute("Name")?.Value ?? string.Empty;
             string value = data.Value.Trim();
             if (name.Equals("ExceptionCode", StringComparison.OrdinalIgnoreCase) && HexCode.IsMatch(value))
-                normalized.Add(new XAttribute("exceptionCode", value.ToUpperInvariant()));
+                normalized.SetAttributeValue("exceptionCode", "0x" + (value.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? value[2..] : value).ToUpperInvariant());
             else if (name.Equals("FaultingModuleName", StringComparison.OrdinalIgnoreCase) ||
                      name.Equals("ModuleName", StringComparison.OrdinalIgnoreCase))
             {
                 string basename = Path.GetFileName(value.Replace('/', '\\'));
-                if (SafeBaseName.IsMatch(basename)) normalized.Add(new XAttribute("faultingModule", basename));
+                if (SafeBaseName.IsMatch(basename)) normalized.SetAttributeValue("faultingModule", basename);
             }
             else if (name.Equals("AppVersion", StringComparison.OrdinalIgnoreCase) && Version.IsMatch(value))
-                normalized.Add(new XAttribute("applicationVersion", value));
+                normalized.SetAttributeValue("applicationVersion", value);
         }
+        string relation = DateTimeOffset.TryParse(timestamp, CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal, out var recordedAt)
+            ? recordedAt < sessionStart ? "BeforeCurrentSessionStart" : "AtOrAfterCurrentSessionStart" : "Unknown";
+        string? appVersion = normalized.Attribute("applicationVersion")?.Value;
+        var version = AppBuildIdentity.ResolveFileVersion(appVersion);
+        normalized.SetAttributeValue("eventTimeRelation", relation);
+        normalized.SetAttributeValue("versionAttribution", version.Attribution);
+        if (version.ProductVersion is not null) normalized.SetAttributeValue("resolvedProductVersion", version.ProductVersion);
+        uint? faultPid = null;
+        if (provider == "Application Error" && eventId == "1000")
+        {
+            string? rawPid = source.Descendants().FirstOrDefault(x => x.Name.LocalName == "Data" &&
+                x.Attribute("Name")?.Value is "ProcessId" or "FaultingProcessId")?.Value.Trim();
+            if (rawPid is not null && uint.TryParse(rawPid.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? rawPid[2..] : rawPid,
+                rawPid.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? NumberStyles.HexNumber : NumberStyles.None,
+                CultureInfo.InvariantCulture, out uint parsedPid) && parsedPid > 0) faultPid = parsedPid;
+        }
+        if (faultPid.HasValue) normalized.SetAttributeValue("faultingProcessId", faultPid.Value);
+        string correlation = !faultPid.HasValue ? "NotAvailable" :
+            relation == "BeforeCurrentSessionStart" || faultPid != (uint)currentProcessId ? "OtherProcess" :
+            relation == "AtOrAfterCurrentSessionStart" && version.ProductVersion == AppBuildIdentity.Current.ProductVersion
+                ? "Matched" : "Unknown";
+        normalized.SetAttributeValue("processCorrelation", correlation);
+        normalized.SetAttributeValue("attributionReason", relation == "BeforeCurrentSessionStart" ? "HistoricalEvent" :
+            correlation == "Matched" ? "FaultPidTimeAndVersionMatch" : "InsufficientCurrentProcessEvidence");
         return normalized;
     }
 

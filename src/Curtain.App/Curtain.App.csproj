@@ -15,6 +15,11 @@
     <Platforms>x64</Platforms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <Version Condition="'$(Version)' == ''">0.2.0-beta.7</Version>
+    <AssemblyVersion>0.2.0.0</AssemblyVersion>
+    <FileVersion Condition="'$(FileVersion)' == ''">0.2.0.7</FileVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <CurtainDistributionKind Condition="'$(CurtainDistributionKind)' == ''">Development</CurtainDistributionKind>
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>
@@ -22,6 +27,7 @@
     <DefineConstants>$(DefineConstants);CURTAIN_TEST_SETTINGS</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="../../release/diagnostic-version-map.json" LogicalName="Curtain.ReleaseVersionMap" />
     <Content Include="Assets\Curtain.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="Assets\Curtain.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="Services\Curtain.EtwWatchdog.ps1" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
@@ -32,4 +38,27 @@
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.7175" />
     <ProjectReference Include="../Curtain.Core/Curtain.Core.csproj" />
   </ItemGroup>
+  <Target Name="CurtainBuildIdentity" BeforeTargets="GetAssemblyAttributes">
+    <Exec Command="git rev-parse HEAD" WorkingDirectory="$(MSBuildProjectDirectory)" ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="Low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="CurtainGitCommit" />
+      <Output TaskParameter="ExitCode" PropertyName="CurtainGitExit" />
+    </Exec>
+    <Exec Command="git status --porcelain --untracked-files=normal" WorkingDirectory="$(MSBuildProjectDirectory)" ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="Low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="CurtainGitStatus" />
+      <Output TaskParameter="ExitCode" PropertyName="CurtainStatusExit" />
+    </Exec>
+    <PropertyGroup>
+      <CurtainGitCommit Condition="'$(CurtainGitExit)' != '0'">Unknown</CurtainGitCommit>
+      <CurtainDirty>false</CurtainDirty>
+      <CurtainDirty Condition="'$(CurtainGitStatus)' != ''">true</CurtainDirty>
+      <CurtainDirty Condition="'$(CurtainStatusExit)' != '0'">Unknown</CurtainDirty>
+    </PropertyGroup>
+    <ItemGroup>
+      <AssemblyMetadata Include="GitCommit" Value="$(CurtainGitCommit)" />
+      <AssemblyMetadata Include="BuildId" Value="$([System.Guid]::NewGuid().ToString('N'))" />
+      <AssemblyMetadata Include="BuildTimestampUtc" Value="$([System.DateTime]::UtcNow.ToString('O'))" />
+      <AssemblyMetadata Include="WorkingTreeDirty" Value="$(CurtainDirty)" />
+      <AssemblyMetadata Include="DistributionKind" Value="$(CurtainDistributionKind)" />
+    </ItemGroup>
+  </Target>
 </Project>

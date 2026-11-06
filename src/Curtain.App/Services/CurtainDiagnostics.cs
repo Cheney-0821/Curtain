@@ -38,7 +38,13 @@ internal sealed record CurtainDiagnosticEntry(
     double MetricValue,
     string ProcessName,
     string SessionId,
-    string RuleId);
+    string RuleId,
+    string ProductVersion,
+    string FileVersion,
+    string GitCommit,
+    string BuildId,
+    string AppSessionId,
+    DateTimeOffset AppSessionStartedAtUtc);
 
 /// <summary>
 /// Release-safe structured local diagnostics. This deliberately has no arbitrary message,
@@ -189,7 +195,13 @@ internal static class CurtainDiagnostics
             double.IsFinite(metricValue) && Math.Abs(metricValue) <= 1_000_000 ? metricValue : 0,
             SafeCode(processName, string.Empty),
             SafeCode(sessionId, string.Empty),
-            SafeCode(ruleId, string.Empty));
+            SafeCode(ruleId, string.Empty),
+            AppBuildIdentity.Current.ProductVersion,
+            AppBuildIdentity.Current.FileVersion,
+            AppBuildIdentity.Current.GitCommit,
+            AppBuildIdentity.Current.BuildId,
+            AppDiagnosticSession.Current.AppSessionId,
+            AppDiagnosticSession.Current.AppSessionStartedAtUtc);
 
         lock (Gate)
         {
@@ -206,7 +218,9 @@ internal static class CurtainDiagnostics
                     SafeCode(metricName, string.Empty),
                     double.IsFinite(metricValue) && Math.Abs(metricValue) <= 1_000_000 ? metricValue : 0,
                     SafeCode(processName, string.Empty),
-                    SafeCode(sessionId, string.Empty), SafeCode(ruleId, string.Empty));
+                    SafeCode(sessionId, string.Empty), SafeCode(ruleId, string.Empty),
+                    entry.ProductVersion, entry.FileVersion, entry.GitCommit, entry.BuildId, entry.AppSessionId,
+                    entry.AppSessionStartedAtUtc.ToString("O"), entry.ApplicationProcessId);
             }
             catch (Exception ex)
             {

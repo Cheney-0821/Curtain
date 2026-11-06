@@ -1,13 +1,25 @@
-param(
+﻿param(
     [Parameter(Mandatory = $true)]
     [ValidatePattern('^\d+\.\d+\.\d+-beta\.\d+(?:\.\d+)*$')]
     [string]$Version,
     [switch]$PublishOnly,
+    [switch]$TestSettings,
     [string]$ArtifactRoot
 )
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $project = Join-Path $repo 'src/Curtain.App/Curtain.App.csproj'
+$versionMapPath = Join-Path $repo 'release/diagnostic-version-map.json'
+$versionMap = Get-Content -LiteralPath $versionMapPath -Raw | ConvertFrom-Json
+$mapping = @($versionMap.PSObject.Properties | Where-Object { $_.Value -eq $Version })
+if ($mapping.Count -ne 1) { throw 'Version must have exactly one registered FileVersion mapping.' }
+if (@($versionMap.PSObject.Properties.Value | Group-Object | Where-Object Count -gt 1).Count) {
+    throw 'Duplicate product versions in diagnostic version map.'
+}
+$fileVersion = $mapping[0].Name
+if ($fileVersion -notmatch '^\d+\.\d+\.\d+\.\d+$' -or
+    @($fileVersion.Split('.') | Where-Object { [int]$_ -gt 65535 }).Count) { throw 'Invalid numeric FileVersion.' }
+$assemblyVersion = '0.2.0.0'
 $artifactRootPath = if ([string]::IsNullOrWhiteSpace($ArtifactRoot)) {
     Join-Path $repo 'artifacts/B3'
 } else {
@@ -32,13 +44,24 @@ foreach ($target in @($publish) + $(if ($PublishOnly) { @() } else { @($releaseF
 New-Item -ItemType Directory -Force -Path $publish | Out-Null
 
 dotnet publish $project -c Release -r win-x64 --self-contained true -o $publish `
-  -p:Platform=x64 -p:Version=$Version -p:WindowsAppSDKSelfContained=true `
+  -p:CurtainTestSettings=$($TestSettings.ToString().ToLowerInvariant()) -p:Platform=x64 -p:Version=$Version -p:AssemblyVersion=$assemblyVersion -p:FileVersion=$fileVersion `
+  -p:InformationalVersion=$Version -p:CurtainDistributionKind=PortableOrUnpacked -p:WindowsAppSDKSelfContained=true `
   -p:EnableMsixTooling=true -p:PublishReadyToRun=false `
   -p:PublishSingleFile=false -p:PublishTrimmed=false `
   -p:DebugType=None -p:DebugSymbols=false
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed' }
 $publishedExe = Join-Path $publish 'Curtain.App.exe'
 if (-not (Test-Path $publishedExe)) { throw 'Curtain.App.exe missing after publish' }
+foreach ($binary in @($publishedExe, (Join-Path $publish 'Curtain.App.dll'))) {
+    $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($binary)
+    if ($info.FileVersion -ne $fileVersion -or $info.ProductVersion.Split('+')[0] -ne $Version) {
+        throw "Published version metadata mismatch: $binary"
+    }
+}
+if ([Reflection.AssemblyName]::GetAssemblyName((Join-Path $publish 'Curtain.App.dll')).Version.ToString() -ne $assemblyVersion) {
+    throw 'Published AssemblyVersion mismatch.'
+}
+Copy-Item -LiteralPath $versionMapPath -Destination (Join-Path $publish 'diagnostic-version-map.json')
 Get-ChildItem -LiteralPath $publish -Filter '*.pdb' -File -Recurse | Remove-Item -Force
 
 # Keep the notices beside every published build and inside the Velopack packages.

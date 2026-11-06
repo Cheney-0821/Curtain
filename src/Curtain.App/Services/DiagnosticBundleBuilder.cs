@@ -32,7 +32,7 @@ internal sealed class DiagnosticBundleBuilder
     private const long MaximumSingleFileBytes = 64 * 1024 * 1024;
     private const long MaximumTotalBytes = 128 * 1024 * 1024;
     private const int MaximumLogFiles = 20;
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
     private static readonly Regex SafeLogCode = new("^[A-Za-z0-9_.-]{0,96}$", RegexOptions.Compiled);
 
     internal DiagnosticBundleResult Create(string? destinationDirectory = null, bool includeRawEtw = false,
@@ -199,9 +199,11 @@ internal sealed class DiagnosticBundleBuilder
                 AddTextEntry(archive, manifestEntries, "manifest.json",
                     JsonSerializer.Serialize(new
                     {
-                        schemaVersion = 1,
+                        schemaVersion = 2,
                         createdAtUtc = DateTimeOffset.UtcNow,
                         application = "Curtain",
+                        versionIdentity = AppBuildIdentity.Current,
+                        appSession = AppDiagnosticSession.Current,
                         files = manifestEntries.ToArray(),
                         warnings = warnings.ToArray()
                     }, JsonOptions), ref included);
@@ -412,6 +414,11 @@ internal sealed class DiagnosticBundleBuilder
             WriteSafeString(writer, root, "processName");
             WriteSafeString(writer, root, "sessionId");
             WriteSafeString(writer, root, "ruleId");
+            foreach (string field in new[] { "productVersion", "fileVersion", "gitCommit", "buildId", "appSessionId" })
+                WriteSafeString(writer, root, field);
+            if (root.TryGetProperty("appSessionStartedAtUtc", out var sessionTime) &&
+                sessionTime.ValueKind == JsonValueKind.String && sessionTime.TryGetDateTimeOffset(out var started))
+                writer.WriteString("appSessionStartedAtUtc", started.ToUniversalTime());
             writer.WriteEndObject();
         }
         line.WriteByte((byte)'\n');
@@ -466,10 +473,16 @@ internal sealed class DiagnosticBundleBuilder
 
     private static object BuildSummary(IReadOnlyList<string> warnings) => new
     {
-        schemaVersion = 1,
+        schemaVersion = 2,
         createdAtUtc = DateTimeOffset.UtcNow,
         application = "Curtain",
-        applicationVersion = Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "unknown",
+        applicationVersion = AppBuildIdentity.Current.ProductVersion,
+        productVersion = AppBuildIdentity.Current.ProductVersion,
+        fileVersion = AppBuildIdentity.Current.FileVersion,
+        versionIdentity = AppBuildIdentity.Current,
+        appSession = AppDiagnosticSession.Current,
+        structuredLogWindowHours = 24,
+        windowsEventWindowDays = 7,
         currentProcessId = Environment.ProcessId,
         currentProcessArchitecture = RuntimeInformation.ProcessArchitecture.ToString(),
         diagnosticsDirectoryAvailable = Directory.Exists(CurtainDiagnostics.DirectoryPath),
@@ -479,36 +492,25 @@ internal sealed class DiagnosticBundleBuilder
 
     private static object BuildEnvironmentSnapshot()
     {
-        string? fileVersion = null;
-        string? productVersion = null;
-        try
-        {
-            if (!string.IsNullOrWhiteSpace(Environment.ProcessPath))
-            {
-                FileVersionInfo version = FileVersionInfo.GetVersionInfo(Environment.ProcessPath);
-                fileVersion = version.FileVersion;
-                productVersion = version.ProductVersion;
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
-        {
-            // Version metadata is optional; do not fail bundle creation for it.
-        }
-
         var windows = ReadWindowsVersion();
+        var installation = InstallKindDetector.Detect();
         return new
         {
             application = "Curtain",
-            assemblyVersion = typeof(DiagnosticBundleBuilder).Assembly.GetName().Version?.ToString(),
-            fileVersion,
-            productVersion,
+            schemaVersion = 2,
+            versionIdentity = AppBuildIdentity.Current,
+            appSession = AppDiagnosticSession.Current,
+            assemblyVersion = AppBuildIdentity.Current.AssemblyVersion,
+            fileVersion = AppBuildIdentity.Current.FileVersion,
+            productVersion = AppBuildIdentity.Current.ProductVersion,
             windowsProductName = windows.ProductName,
             windowsDisplayVersion = windows.DisplayVersion,
             windowsReleaseId = windows.ReleaseId,
             windowsBuild = windows.Build,
             windowsUpdateBuildRevision = windows.UpdateBuildRevision,
             windowsUiLanguage = windows.UiLanguage,
-            installKind = DetermineInstallKind(),
+            installKind = installation.Kind,
+            installKindDetectionMethod = installation.DetectionMethod,
             osVersion = Environment.OSVersion.Version.ToString(),
             osBuild = Environment.OSVersion.Version.Build,
             osVersionString = Environment.OSVersion.VersionString,
@@ -550,21 +552,6 @@ internal sealed class DiagnosticBundleBuilder
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
             return new WindowsVersionSnapshot(null, null, null, null, null, null);
-        }
-    }
-
-    private static string DetermineInstallKind()
-    {
-        try
-        {
-            string? directoryName = Directory.GetParent(Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory))?.Name;
-            return string.Equals(directoryName, "current", StringComparison.OrdinalIgnoreCase)
-                ? "VelopackVersioned"
-                : "UnpackedFolderOrDevelopmentOutput";
-        }
-        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
-        {
-            return "Unknown";
         }
     }
 

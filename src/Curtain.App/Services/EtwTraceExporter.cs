@@ -102,6 +102,12 @@ internal static class EtwTraceExporter
         AddSafeCode(normalized, data, "processName", "processName");
         AddSafeCode(normalized, data, "sessionId", "sessionId");
         AddSafeCode(normalized, data, "ruleId", "ruleId");
+        foreach (string field in new[] { "productVersion", "fileVersion", "gitCommit", "buildId", "appSessionId" })
+            AddSafeCode(normalized, data, field, field);
+        AddInt64(normalized, data, "applicationProcessId", "applicationProcessId");
+        if (data.TryGetValue("appSessionStartedAtUtc", out string? sessionTime) &&
+            DateTimeOffset.TryParse(sessionTime, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var started))
+            normalized.SetAttributeValue("appSessionStartedAtUtc", started.ToUniversalTime().ToString("O"));
         AddSafeCode(normalized, data, "state", "state");
         AddInt64(normalized, data, "hwnd", "hwnd");
         AddInt64(normalized, data, "windowFromPointHwnd", "windowFromPointHwnd");

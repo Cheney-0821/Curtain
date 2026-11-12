@@ -104,7 +104,7 @@ Curtain can watch for a period of keyboard and mouse inactivity and start protec
 
 Both shortcuts are customizable. The mouse Back and Forward buttons can optionally toggle fullscreen protection and are off by default. The saved app rules persist and matching windows are rebound when an app starts again; the live list of individual windows is rebuilt from running applications.
 
-Curtain targets Windows x64. The minimum supported Windows build is Windows 10 2004 (build 19041). This release was tested on Windows 10 22H2 (build 19045) and Windows 11 25H2. Windows 10 1903 (build 18362) is below the minimum and is not supported by this validation.
+Curtain targets Windows x64. The minimum supported Windows build is Windows 10 2004 (build 19041). This release was tested on Windows 10 22H2 (build 19045) and Windows 11 25H2.
 
 </details>
 

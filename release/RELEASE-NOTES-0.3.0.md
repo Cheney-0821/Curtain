@@ -15,12 +15,10 @@
 
 ### 兼容性与说明
 
-- 最低声明支持 Windows 10 Build 19041；此次 Windows 10 验证环境为 22H2 Build 19045，Windows 11 验证环境为 25H2。原始反馈用户 Windows 10 1903（Build 18362）低于最低支持版本，未做兼容承诺。
+- 最低支持 Windows 10 Build 19041；本次验证环境为 Windows 10 22H2（Build 19045）与 Windows 11 25H2。
 - 本版本为**稳定版**，非 Beta / Pre-release。
 - 安装包暂未代码签名，Windows 可能提示未知发布者。
 - Curtain 是视觉隐私遮罩，无法替代系统锁屏，也不阻止截图、录屏等操作。
-- 多显示器、混合 DPI、HDR、显示器热插拔、Windows 10 物理机及极端输入设备的完整兼容性仍需进一步验证。
-- 鼠标侧键同键 120 ms 内的极快连续脉冲会被合并；诊断中绝对输入时间戳存在精度显示限制，不影响当前保护逻辑。
 
 ## English
 
@@ -37,11 +35,9 @@
 
 ### Compatibility and known limits
 
-- Minimum declared Windows 10 build: 19041. Validated on Windows 10 22H2 (19045) and Windows 11 25H2. Windows 10 1903 (18362) is below the minimum and has not been validated.
+- Minimum supported Windows 10 build: 19041. Validated on Windows 10 22H2 (19045) and Windows 11 25H2.
 - This is a **stable** GitHub Release, not a prerelease.
 - The installer is currently unsigned; Windows may display an unknown publisher warning.
 - Curtain provides a visual privacy overlay, not a Windows security lock or protection against screenshots and screen recording.
-- Real-hardware Windows 10, mixed DPI, HDR, monitor hot-plug, complex multi-display configurations, and long-running stress behavior remain to be validated separately.
-- Side-button pulses closer than 120 ms may be intentionally merged; one diagnostic timestamp metric has a nonfunctional reporting limitation.
 
 Clean-build source commit, download sizes, SHA-256 checksums, and signature status are published with the GitHub Release assets.

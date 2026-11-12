@@ -103,7 +103,7 @@ Curtain 可以根据键盘、鼠标的无操作时长自动开启保护。**什�
 
 两组快捷键均可自定义。鼠标后退/前进键可选作全屏保护开关，默认关闭。已保存的应用规则会持续保留，应用再次启动时重新绑定窗口；运行中的窗口列表则根据当前运行的应用重建。
 
-Curtain 面向 Windows x64，最低支持 Windows 10 2004（build 19041）。本次已在 Windows 10 22H2（build 19045）与 Windows 11 25H2 测试。Windows 10 1903（build 18362）低于最低支持版本，不在本次验证范围内。
+Curtain 面向 Windows x64，最低支持 Windows 10 2004（build 19041）。本次已在 Windows 10 22H2（build 19045）与 Windows 11 25H2 测试。
 
 </details>
 

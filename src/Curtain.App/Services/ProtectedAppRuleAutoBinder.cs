@@ -23,6 +23,7 @@ internal sealed class ProtectedAppRuleAutoBinder : IDisposable
     private readonly Dictionary<long, WindowIdentity> _boundIdentityByHandle = new();
     private readonly Dictionary<long, WindowIdentity> _suppressedIdentityByHandle = new();
     private readonly Dictionary<long, string> _lastFailureByHandle = new();
+    private readonly Dictionary<long, (WindowIdentity Identity, long RetryAfter)> _attachRetryByHandle = new();
     private bool _disposed;
 
     internal event Action? RulesChanged;
@@ -81,6 +82,7 @@ internal sealed class ProtectedAppRuleAutoBinder : IDisposable
             });
             _suppressedHandles.Remove(hwnd.ToInt64());
             _suppressedIdentityByHandle.Remove(hwnd.ToInt64());
+            _attachRetryByHandle.Remove(hwnd.ToInt64());
             if (TargetWindow.Read(hwnd) is { } targetIdentity)
                 _boundIdentityByHandle[hwnd.ToInt64()] = targetIdentity;
             _boundHandles.Add(hwnd.ToInt64());
@@ -188,6 +190,7 @@ internal sealed class ProtectedAppRuleAutoBinder : IDisposable
             _suppressedIdentityByHandle.Remove(hwnd.ToInt64());
             _boundRuleByHandle.Remove(hwnd.ToInt64());
             _lastFailureByHandle.Remove(hwnd.ToInt64());
+            _attachRetryByHandle.Remove(hwnd.ToInt64());
             RefreshRuleItems();
             return;
         }
@@ -222,6 +225,7 @@ internal sealed class ProtectedAppRuleAutoBinder : IDisposable
         if (rule is null)
         {
             _lastFailureByHandle.Remove(hwnd.ToInt64());
+            _attachRetryByHandle.Remove(handle);
             return;
         }
 
@@ -232,12 +236,19 @@ internal sealed class ProtectedAppRuleAutoBinder : IDisposable
             return;
         }
 
+        if (TargetWindow.Read(hwnd) is not { } current) return;
+        if (_attachRetryByHandle.TryGetValue(handle, out var retry) && retry.Identity == current &&
+            Environment.TickCount64 < retry.RetryAfter) return;
+        // A failed construction must not recreate two overlay HWNDs on every two-second poll.
+        // Keep retrying transient failures, and let reused HWNDs start immediately.
+        _attachRetryByHandle[handle] = (current, Environment.TickCount64 + 30_000);
         string operationId = CurtainDiagnostics.NewOperationId();
         try
         {
             ProtectedWindowItem? attached = _attach(hwnd, rule, operationId);
             if (attached is not null)
             {
+                _attachRetryByHandle.Remove(handle);
                 _boundHandles.Add(hwnd.ToInt64());
                 if (TargetWindow.Read(hwnd) is { } attachedIdentity)
                     _boundIdentityByHandle[hwnd.ToInt64()] = attachedIdentity;
@@ -343,5 +354,6 @@ internal sealed class ProtectedAppRuleAutoBinder : IDisposable
         _boundIdentityByHandle.Clear();
         _suppressedIdentityByHandle.Clear();
         _lastFailureByHandle.Clear();
+        _attachRetryByHandle.Clear();
     }
 }

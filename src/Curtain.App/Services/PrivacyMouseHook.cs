@@ -86,9 +86,16 @@ internal sealed class PrivacyMouseHook : IDisposable
         if (code >= 0 && (uint)message is 0x20B or 0x20C)
         {
             var input = Marshal.PtrToStructure<SelectionNative.MouseData>(data);
-            var result = _gate.Handle((uint)message, input.Data, _selected, !_stopping);
-            if (result.Toggle)
-                _dispatcher.TryEnqueue(() => { if (!_stopping) _toggle(); });
+            var result = _gate.Handle((uint)message, input.Data, _selected, !_stopping, input.Time);
+            if (result.Suppress)
+                _dispatcher.TryEnqueue(() =>
+                {
+                    if (_stopping) return;
+                    CurtainDiagnostics.Write("fullscreen.side-key.input", stage: (uint)message == 0x20B ? "Down" : "Up",
+                        reasonCode: $"{_selected}_{((input.Flags & 1) != 0 ? "Injected" : "Native")}_{(result.Toggle ? "Toggle" : "Consumed")}",
+                        metricName: "InputTimestampMilliseconds", metricValue: input.Time);
+                    if (result.Toggle) _toggle();
+                });
             if (result.Suppress) return 1;
         }
         return SelectionNative.CallNextHookEx(_hook, code, message, data);

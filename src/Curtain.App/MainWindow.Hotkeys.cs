@@ -79,7 +79,7 @@ public sealed partial class MainWindow
         _privacyMouseHook?.Dispose();
         _privacyMouseHook = null;
         if (_settings.PrivacyMouseButton == Curtain.Core.Protection.PrivacyMouseButton.Off) return;
-        _privacyMouseHook = new(DispatcherQueue, _settings.PrivacyMouseButton, TogglePrivacyProtection);
+        _privacyMouseHook = new(DispatcherQueue, _settings.PrivacyMouseButton, () => TogglePrivacyProtection("SideKey"));
         if (!_privacyMouseHook.IsInstalled)
             Localized.SetText(StatusText, "PrivacyMouseFailed");
     }
@@ -90,7 +90,7 @@ public sealed partial class MainWindow
         var before = _settings;
         var selected = (Curtain.Core.Protection.PrivacyMouseButton)PrivacyMouseCombo.SelectedIndex;
         PrivacyMouseHook? candidate = selected == Curtain.Core.Protection.PrivacyMouseButton.Off
-            ? null : new(DispatcherQueue, selected, TogglePrivacyProtection);
+            ? null : new(DispatcherQueue, selected, () => TogglePrivacyProtection("SideKey"));
         string operationId = CurtainDiagnostics.NewOperationId();
         _settings = before with { PrivacyMouseButton = selected };
         if (candidate is { IsInstalled: false } || !SaveSettings(operationId))

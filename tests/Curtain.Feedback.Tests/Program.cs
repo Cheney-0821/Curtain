@@ -57,6 +57,8 @@ try
         Check(multipart.Contains("name=\"file\"; filename=\"Curtain-Diagnostics.zip\"") && !multipart.Contains("filename*="), "browser-compatible quoted file disposition");
         Check(new[] { "email", "description", "version", "requestId" }.All(name => multipart.Contains("name=\"" + name + "\"")), "all field names quoted for Worker parser");
         Check(multipart.Contains("version") && multipart.Contains("requestId"), "version and idempotency metadata");
+        Check(multipart.Contains("\r\n\r\n" + AppBuildIdentity.Current.ProductVersion + "\r\n"),
+            "feedback version uses the full product version");
         Check(multipart.Contains("description") && multipart.Contains("email"), "optional fields included");
         return new HttpResponseMessage(HttpStatusCode.Created)
         {

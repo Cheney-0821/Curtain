@@ -70,13 +70,13 @@ internal static class PrivacyNative
             throw new Win32Exception(Marshal.GetLastPInvokeError(), "无法将隐私遮罩覆盖屏幕。");
     }
 
-    internal static nint FindFullScreenOccluder(nint overlay, ScreenRect area)
+    internal static nint FindFullScreenOccluder(nint overlay, ScreenRect area, nint restoreControl = 0)
     {
         // Topmost is a group, not a permanent ordering within that group.
         nint window = NativeMethods.GetWindow(overlay, NativeMethods.GW_HWNDPREV);
         for (int count = 0; window != 0 && count < 512; count++)
         {
-            if (NativeMethods.IsWindowVisible(window) && !NativeMethods.IsIconic(window) &&
+            if (window != restoreControl && NativeMethods.IsWindowVisible(window) && !NativeMethods.IsIconic(window) &&
                 NativeMethods.GetWindowRect(window, out var bounds) &&
                 bounds.Right - bounds.Left > 1 && bounds.Bottom - bounds.Top > 1 &&
                 bounds.Right > area.Left && bounds.Left < area.Left + area.Width &&

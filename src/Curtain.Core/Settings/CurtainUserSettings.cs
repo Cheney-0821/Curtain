@@ -176,6 +176,7 @@ public sealed class CurtainUserSettingsStore
 
     private static CurtainUserSettings NormalizeNewSettings(CurtainUserSettings settings) => settings with
     {
+        Hotkey = settings.Hotkey is null ? null! : settings.Hotkey with { Enabled = true },
         BlurPreset = OverlayBlurPreset.Normalize(settings.BlurPreset),
         Language = AppLanguage.Normalize(settings.Language),
         WindowProtection = WindowBlurScale.Normalize(settings.WindowProtection ?? new()),

@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Headers;
-using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -88,7 +87,7 @@ internal sealed class DiagnosticFeedbackUploader
             zipPart.Headers.ContentDisposition.FileName = "\"Curtain-Diagnostics.zip\"";
             form.Add(new StringContent(cleanEmail, Encoding.UTF8), "email");
             form.Add(new StringContent(cleanDescription, Encoding.UTF8), "description");
-            string version = Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "0.2.0-beta.6";
+            string version = AppBuildIdentity.Current.ProductVersion;
             form.Add(new StringContent(version, Encoding.UTF8), "version");
             form.Add(new StringContent(requestId.ToString("D"), Encoding.UTF8), "requestId");
             // Match browser FormData syntax accepted by the Worker parser.

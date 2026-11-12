@@ -46,6 +46,7 @@ internal sealed class CurtainWindow
     private int _pendingBackdropGeneration;
     internal event Action? RenderFailed;
     internal event Action? FirstFramePresented;
+    internal event Action<bool>? VisibilityTransitionCompleted;
     public nint Handle { get; }
     public bool HasSurfaceCapture => GetCapture() == Handle;
     internal bool IsVisible => NativeMethods.IsWindowVisible(Handle);
@@ -74,20 +75,28 @@ internal sealed class CurtainWindow
         Handle = HandleNative.CreateWindowExW(0x00200000 | 0x08000000 | 0x80, ClassName,
             "Curtain privacy overlay", 0x80000000, 0, 0, 1, 1, 0, 0, HandleNative.GetModuleHandleW(null), 0);
         if (Handle == 0) throw new System.ComponentModel.Win32Exception();
+        string stage = "host-backdrop-attribute";
         try
         {
-            int disabled = 0;
-            Marshal.ThrowExceptionForHR(DwmSetWindowAttribute(Handle, 17, ref disabled, 4));
+            if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000))
+            {
+                int disabled = 0;
+                Marshal.ThrowExceptionForHR(DwmSetWindowAttribute(Handle, 17, ref disabled, 4));
+            }
+            stage = "extend-frame";
             var margins = new Margins { Left = -1, Right = -1, Top = -1, Bottom = -1 };
             Marshal.ThrowExceptionForHR(DwmExtendFrameIntoClientArea(Handle, ref margins));
+            stage = "desktop-target";
             _compositor = new Compositor();
             _compositor.As<ICompositorDesktopInterop>().CreateDesktopWindowTarget(Handle, false, out nint raw);
             try { _target = MarshalInterface<DesktopWindowTarget>.FromAbi(raw); }
             finally { if (raw != 0) Marshal.Release(raw); }
             _visual = _compositor.CreateSpriteVisual(); _visual.Size = Vector2.One;
+            stage = "backdrop-brush";
             _backdrop = _compositor.CreateBackdropBrush();
             using var blur = new GaussianBlurEffect { Name = "Blur", BlurAmount = 0,
                 BorderMode = EffectBorderMode.Hard, Source = new CompositionEffectSourceParameter("Source") };
+            stage = "gaussian-effect";
             _factory = _compositor.CreateEffectFactory(blur, new[] { "Blur.BlurAmount" });
             _effect = _factory.CreateBrush(); _effect.SetSourceParameter("Source", _backdrop);
             _visual.Brush = _effect; _target.Root = _visual;
@@ -100,8 +109,12 @@ internal sealed class CurtainWindow
             _timer = dispatcher.CreateTimer(); _timer.Interval = TimeSpan.FromMilliseconds(16); _timer.IsRepeating = true;
             _timer.Tick += (_, _) => Tick();
         }
-        catch
+        catch (Exception ex)
         {
+            CurtainDiagnostics.WriteException("overlay.render.initialization-failed", ex,
+                operationId: _operationId, stage: stage, reasonCode: "CompositionInitializationFailed",
+                hwnd: Handle.ToInt64(), ownerHwnd: _protectedWindowHandle,
+                targetProcessId: (int)_protectedProcessId, sessionId: _sessionId, ruleId: _ruleId);
             _messages?.Dispose(); _input?.Dispose(); _timer?.Stop();
             if (_target is not null) _target.Root = null;
             _effect?.Dispose(); _factory?.Dispose(); _backdrop?.Dispose(); _visual?.Dispose();
@@ -184,6 +197,7 @@ internal sealed class CurtainWindow
         {
             _ramp = visible ? 255 : 0; ApplyBlur(); NativeMethods.ShowWindow(Handle, visible ? 4 : 0);
             _timer.Stop(); _running = false;
+            VisibilityTransitionCompleted?.Invoke(visible);
             CurtainDiagnostics.Write("overlay.visibility.completed", operationId: _operationId,
                 stage: "window-protection",
                 reasonCode: NativeMethods.IsWindowVisible(Handle) == visible ? "Success" : "VisibilityMismatch",
@@ -233,6 +247,7 @@ internal sealed class CurtainWindow
             if (!animate)
             {
                 _ramp = 255; ApplyBlur(); _visual.Opacity = 1; NativeMethods.ShowWindow(Handle, 4);
+                VisibilityTransitionCompleted?.Invoke(true);
                 CurtainDiagnostics.Write("overlay.visibility.completed", operationId: _operationId,
                     stage: "fresh-input-frame",
                     reasonCode: NativeMethods.IsWindowVisible(Handle) ? "Success" : "VisibilityMismatch",
@@ -279,6 +294,7 @@ internal sealed class CurtainWindow
         if (elapsed < _duration) return;
         _running = false; _timer.Stop();
         if (!_desiredVisible) NativeMethods.ShowWindow(Handle, 0);
+        VisibilityTransitionCompleted?.Invoke(_desiredVisible);
         CurtainDiagnostics.Write("overlay.animation.completed", operationId: _operationId,
             stage: "opacity-ramp",
             reasonCode: NativeMethods.IsWindowVisible(Handle) == _desiredVisible ? "Success" : "VisibilityMismatch",

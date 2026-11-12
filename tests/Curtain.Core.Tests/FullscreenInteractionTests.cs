@@ -89,6 +89,22 @@ internal static class FullscreenInteractionTests
         gate.Handle(0x20B, forward, PrivacyMouseButton.Forward);
         Check(gate.Handle(0x20C, forward, PrivacyMouseButton.Forward).Toggle,
             "Forward maps to same release toggle");
+        var duplicateGate = new SideButtonInputGate();
+        duplicateGate.Handle(0x20B, forward, PrivacyMouseButton.Forward, timestampMilliseconds: 1000);
+        Check(duplicateGate.Handle(0x20C, forward, PrivacyMouseButton.Forward, timestampMilliseconds: 1020).Toggle,
+            "first complete Forward click toggles immediately");
+        duplicateGate.Handle(0x20B, forward, PrivacyMouseButton.Forward, timestampMilliseconds: 1060);
+        Check(duplicateGate.Handle(0x20C, forward, PrivacyMouseButton.Forward, timestampMilliseconds: 1100) == new SideButtonResult(true, false),
+            "duplicate complete side-key pulse within 120 ms is consumed without reversing protection");
+        duplicateGate.Handle(0x20B, forward, PrivacyMouseButton.Forward, timestampMilliseconds: 1210);
+        Check(duplicateGate.Handle(0x20C, forward, PrivacyMouseButton.Forward, timestampMilliseconds: 1220).Toggle,
+            "next click at the 120 ms boundary remains responsive");
+        var wrapGate = new SideButtonInputGate();
+        wrapGate.Handle(0x20B, back, PrivacyMouseButton.Back, timestampMilliseconds: uint.MaxValue - 25);
+        wrapGate.Handle(0x20C, back, PrivacyMouseButton.Back, timestampMilliseconds: uint.MaxValue - 20);
+        wrapGate.Handle(0x20B, back, PrivacyMouseButton.Back, timestampMilliseconds: 5);
+        Check(!wrapGate.Handle(0x20C, back, PrivacyMouseButton.Back, timestampMilliseconds: 10).Toggle,
+            "duplicate filtering survives Windows input timestamp wraparound");
         var picker = new SelectionInputGate();
         Check(!picker.Handle(0x20B, true).Suppress && picker.Handle(0x20C, true).Outcome == SelectionOutcome.None &&
               gate.Handle(0x201, back, PrivacyMouseButton.Back) == default,

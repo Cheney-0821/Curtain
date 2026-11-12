@@ -125,7 +125,7 @@ internal sealed class ScreenPrivacyManager : IDisposable
                     continue;
                 }
                 if (!_enabled) continue;
-                var window = new ScreenPrivacyWindow();
+                var window = new ScreenPrivacyWindow(_dispatcher);
                 window.ResumeRequested += OnResume;
                 window.VisibilityTransitionCompleted += OnOverlayVisibilityTransitionCompleted;
                 try
@@ -183,14 +183,14 @@ internal sealed class ScreenPrivacyManager : IDisposable
         long now = Environment.TickCount64;
         foreach (var (bounds, window) in _overlays.Values)
         {
-            if (!window.IsVisible || PrivacyNative.FindFullScreenOccluder(window.Handle, bounds) == 0) continue;
+            if (!window.IsVisible || PrivacyNative.FindFullScreenOccluder(window.Handle, bounds, window.ControlHandle) == 0) continue;
             if (_lastUnresolvedRaise.TryGetValue(window.Handle, out long last) && now - last < 1000) continue;
             FullScreenZOrderDiagnostics.Sample(window.Handle, bounds.Left, bounds.Top, bounds.Width, bounds.Height);
             bool raised = PrivacyNative.RaiseFullScreen(window.Handle);
             CurtainDiagnostics.Write("fullscreen.zorder.checked", CurtainDiagnosticLevel.Warning,
                 operationId: _operationId, stage: "raise-fullscreen", reasonCode: raised ? "Raised" : "RaiseFailed",
                 hwnd: window.Handle.ToInt64(), errorCode: raised ? 0 : Marshal.GetLastPInvokeError());
-            if (!raised || PrivacyNative.FindFullScreenOccluder(window.Handle, bounds) != 0)
+            if (!raised || PrivacyNative.FindFullScreenOccluder(window.Handle, bounds, window.ControlHandle) != 0)
                 _lastUnresolvedRaise[window.Handle] = now;
             else
                 _lastUnresolvedRaise.Remove(window.Handle);

@@ -246,6 +246,15 @@ try
           !json.Contains("WindowClass", StringComparison.Ordinal) &&
           !json.Contains("MinimizeToTray", StringComparison.Ordinal),
         "settings contain no window identity or tray behavior fields");
+    settingsStore.Save(settings with { Hotkey = settings.Hotkey with { Enabled = false } });
+    Check(settingsStore.Load().Settings.Hotkey is { Enabled: true, VirtualKey: 0x77 },
+        "picker shortcut stays enabled while saving its custom combination");
+    File.WriteAllText(Path.Combine(settingsDirectory, "settings.json"),
+        "{\"SchemaVersion\":1,\"Hotkey\":{\"Enabled\":false,\"Modifiers\":6,\"VirtualKey\":119}}");
+    var oldDisabledShortcut = settingsStore.Load();
+    Check(!oldDisabledShortcut.RecoveredFromInvalidFile &&
+          oldDisabledShortcut.Settings.Hotkey is { Enabled: true, Modifiers: 6, VirtualKey: 119 },
+        "legacy disabled picker shortcut becomes enabled without replacing its custom combination");
     File.WriteAllText(Path.Combine(settingsDirectory, "settings.json"),
         "{\"SchemaVersion\":1,\"StartWithWindows\":false,\"Hotkey\":{\"Enabled\":true,\"Modifiers\":6,\"VirtualKey\":120}}");
     var legacySettings = settingsStore.Load();

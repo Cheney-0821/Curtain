@@ -1,8 +1,8 @@
-# 诊断版本与会话归属（beta.7）
+# 诊断版本与会话归属
 
 ## 版本合同
 
-产品版本采用完整 SemVer。当前 0.2.0-beta.7 → FileVersion 0.2.0.7，AssemblyVersion 在 0.2 兼容系列内保持 0.2.0.0。数字文件版本的唯一来源为 release/diagnostic-version-map.json；它作为资源嵌入程序集并随发布文件携带。新增发布版本必须新增唯一数字键和唯一 SemVer 值，禁止复用已登记数字。B3-Pack 显式传递并验证 EXE/DLL 的 FileVersion、ProductVersion 及 DLL AssemblyVersion。表不含旧 0.2.0.0，因为它对应多个历史产品版本；该值永远为 LegacyAmbiguous。未登记值为 Unknown，禁止根据当前安装版本推断。
+产品版本采用完整 SemVer。0.2.0-beta.7 → FileVersion 0.2.0.7；0.3.0 → FileVersion 0.3.0.0。AssemblyVersion 延续现有二进制兼容值 0.2.0.0，产品身份以 ProductVersion 和 FileVersion 为准。数字文件版本的唯一来源为 release/diagnostic-version-map.json；它作为资源嵌入程序集并随发布文件携带。新增发布版本必须新增唯一数字键和唯一 SemVer 值，禁止复用已登记数字。B3-Pack 显式传递并验证 EXE/DLL 的 FileVersion、ProductVersion 及 DLL AssemblyVersion。表不含旧 0.2.0.0，因为它对应多个历史产品版本；该值永远为 LegacyAmbiguous。未登记值为 Unknown，禁止根据当前安装版本推断。
 
 每次构建生成随机 Build ID 和 UTC 时间，记录完整 Git HEAD 与工作树状态（true / false / Unknown 三态字符串）。本地候选如实为 dirty，Git HEAD 只表示构建基点，不代表未提交内容属于该公开提交。候选内测重建可沿用同一产品版本，由 Build ID 区分；公开发布必须登记新产品版本。缺失构建元数据保留 Unknown。
 

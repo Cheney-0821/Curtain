@@ -21,13 +21,15 @@ internal sealed class PinWindow
     private bool _closed = true, _hovered, _pressed;
     private int _width, _height, _dpi = 96;
     private bool _inside;
-    private readonly bool _animationsEnabled;
+    private readonly bool _fullScreen;
+    private double _opacityScale = 1;
     private double _hoverAmount, _pressAmount;
     private double _hoverStartValue, _pressStartValue;
     private long _hoverStartTicks, _pressStartTicks;
     private bool _timerRunning;
 
     public nint Handle { get; }
+    internal bool IsPressed => _pressed;
     public event Action? ToggleRequested;
 
     [DllImport("user32.dll", SetLastError = true)]
@@ -35,8 +37,9 @@ internal sealed class PinWindow
     [DllImport("user32.dll")]
     private static extern bool KillTimer(nint hwnd, nint idEvent);
 
-    public PinWindow()
+    public PinWindow(bool fullScreen = false)
     {
+        _fullScreen = fullScreen;
         if (!_registered)
         {
             var cls = new HandleNative.WindowClass
@@ -56,8 +59,24 @@ internal sealed class PinWindow
             HandleNative.GetModuleHandleW(null), 0);
         if (Handle == 0) throw new Win32Exception(Marshal.GetLastPInvokeError());
         Windows.Add(Handle, this);
-        try { _animationsEnabled = new global::Windows.UI.ViewManagement.UISettings().AnimationsEnabled; }
-        catch { _animationsEnabled = true; }
+    }
+
+    internal void SetOpacity(double opacity)
+    {
+        _opacityScale = Math.Clamp(opacity, 0, 1);
+        if (_width > 0) Render();
+    }
+
+    internal bool ContainsPoint(NativeMethods.Point point)
+    {
+        if (!NativeMethods.GetWindowRect(Handle, out var bounds)) return false;
+        double scale = _dpi / 96.0;
+        double width = Math.Min((104 + 12 * _hoverAmount - 6 * _pressAmount) * scale, _width - 4 * scale);
+        double height = (18 + 2 * _hoverAmount - _pressAmount) * scale;
+        double x = point.X - bounds.Left - _width / 2.0;
+        double y = point.Y - bounds.Top - _height / 2.0;
+        double dx = Math.Max(0, Math.Abs(x) - (width - height) / 2);
+        return dx * dx + y * y <= height * height / 4;
     }
 
     public void UpdateState(bool closed)
@@ -108,13 +127,6 @@ internal sealed class PinWindow
 
     private void StartTimer()
     {
-        if (!_animationsEnabled)
-        {
-            _hoverAmount = _hovered ? 1 : 0;
-            _pressAmount = _pressed ? 1 : 0;
-            Render();
-            return;
-        }
         if (!_timerRunning)
         {
             _timerRunning = SetTimer(Handle, (nint)AnimationTimer, 16, 0) != 0;
@@ -149,15 +161,15 @@ internal sealed class PinWindow
     {
         if (!NativeMethods.IsWindow(Handle) || _width <= 0 || _height <= 0) return;
         double scale = _dpi / 96.0;
-        double barWidth = Math.Max(1, Math.Min((60 + 8 * _hoverAmount - 5 * _pressAmount) * scale, _width - 4 * scale));
-        double barHeight = Math.Max(1, Math.Min((8 + 2 * _hoverAmount - 1.5 * _pressAmount) * scale, _height - 2 * scale));
+        double barWidth = Math.Max(1, Math.Min((_fullScreen ? 104 + 12 * _hoverAmount - 6 * _pressAmount : 60 + 8 * _hoverAmount - 5 * _pressAmount) * scale, _width - 4 * scale));
+        double barHeight = Math.Max(1, Math.Min((_fullScreen ? 18 + 2 * _hoverAmount - _pressAmount : 8 + 2 * _hoverAmount - 1.5 * _pressAmount) * scale, _height - 2 * scale));
         double radius = barHeight / 2;
-        double centerY = _inside ? Math.Min(_height / 2.0, 4 * scale + radius)
+        double centerY = _fullScreen ? _height / 2.0 : _inside ? Math.Min(_height / 2.0, 4 * scale + radius)
             : Math.Max(_height / 2.0, _height - 4 * scale - radius);
         var pixels = new int[_width * _height];
         // Keep the wider existing click target, while its host stays visually invisible.
         Array.Fill(pixels, 1 << 24);
-        double opacity = Math.Clamp((_closed ? 240 : 210) + 15 * _hoverAmount - 24 * _pressAmount, 0, 255);
+        double opacity = Math.Clamp((_closed ? 240 : 210) + 15 * _hoverAmount - 24 * _pressAmount, 0, 255) * _opacityScale;
         for (int y = 0; y < _height; y++)
         for (int x = 0; x < _width; x++)
         {
@@ -205,6 +217,8 @@ internal sealed class PinWindow
             try
             {
                 if (message == 0x21) return 3; // MA_NOACTIVATE
+                if (message == 0x84 && window._fullScreen && NativeMethods.GetCursorPos(out var hitPoint) && !window.ContainsPoint(hitPoint))
+                    return -1; // HTTRANSPARENT outside the visible capsule.
                 if (message == 0x200 && !window._hovered)
                 {
                     window.BeginHover(true);
@@ -221,7 +235,8 @@ internal sealed class PinWindow
                 {
                     bool pressed = window._pressed;
                     window.BeginPress(false);
-                    if (pressed) window.ToggleRequested?.Invoke();
+                    if (pressed && (!window._fullScreen || NativeMethods.GetCursorPos(out var point) && window.ContainsPoint(point)))
+                        window.ToggleRequested?.Invoke();
                     return 0;
                 }
                 if (message == WM_TIMER && wParam == (nint)AnimationTimer)

@@ -173,10 +173,20 @@ internal static class NativeMethods
     }
 
     public static bool SetOverlayOwner(nint overlay, nint target)
+        => SetOverlayOwner(overlay, target, out _);
+
+    [DllImport("kernel32.dll", EntryPoint = "SetLastError")]
+    private static extern void ClearLastError(uint errorCode);
+
+    public static bool SetOverlayOwner(nint overlay, nint target, out int errorCode)
     {
         // Change only our top-level overlay, never the external target's parent/style.
+        ClearLastError(0);
         SetWindowLongPtr(overlay, GWLP_HWNDPARENT, target);
-        return GetWindow(overlay, GW_OWNER) == target;
+        int lastError = Marshal.GetLastPInvokeError();
+        bool assigned = GetWindow(overlay, GW_OWNER) == target;
+        errorCode = assigned ? 0 : lastError;
+        return assigned;
     }
 
     public static bool MoveProtectedWindows(nint target, PixelRect rawTarget, nint curtain,

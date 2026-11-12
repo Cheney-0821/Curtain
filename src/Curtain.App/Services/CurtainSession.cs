@@ -84,9 +84,8 @@ internal sealed class CurtainSession : IDisposable
             _pin = new PinWindow();
             _pin.ToggleRequested += Toggle;
             stage = "owner-assignment";
-            if (!NativeMethods.SetOverlayOwner(_curtain.Handle, Handle) ||
-                !NativeMethods.SetOverlayOwner(_pin.Handle, Handle))
-                throw new InvalidOperationException("无法设置保护窗口的归属，未完成绑定。");
+            AssignOverlayOwner(_curtain.Handle, "CurtainOwner");
+            AssignOverlayOwner(_pin.Handle, "PinOwner");
             CurtainDiagnostics.Write("session.overlay.owner-assigned", operationId: _operationId,
                 stage: "owner-assignment", reasonCode: "CurtainOwnerAssigned",
                 hwnd: _curtain.Handle.ToInt64(), ownerHwnd: Handle.ToInt64(), relatedHwnd: _pin.Handle.ToInt64(),
@@ -117,6 +116,19 @@ internal sealed class CurtainSession : IDisposable
             Dispose();
             throw;
         }
+    }
+    private void AssignOverlayOwner(nint overlay, string stage)
+    {
+        if (NativeMethods.SetOverlayOwner(overlay, Handle, out int errorCode)) return;
+        CurtainDiagnostics.Write("session.overlay.owner-failed", CurtainDiagnosticLevel.Warning,
+            operationId: _operationId, stage: stage, reasonCode: NativeMethods.ClassOf(Handle),
+            hwnd: overlay.ToInt64(), ownerHwnd: Handle.ToInt64(),
+            relatedHwnd: NativeMethods.GetWindow(overlay, NativeMethods.GW_OWNER).ToInt64(),
+            targetProcessId: (int)Target.Identity.ProcessId, errorCode: errorCode,
+            sessionId: SessionId, ruleId: _ruleId);
+        if (errorCode != 0)
+            throw new System.ComponentModel.Win32Exception(errorCode, "无法设置保护窗口的归属，未完成绑定。");
+        throw new InvalidOperationException("无法设置保护窗口的归属，未完成绑定。");
     }
     private void OnRenderFailed() { if (!_disposed) Ended?.Invoke(this, "OverlayErrorWindowRemoved"); }
     private void OnFirstFramePresented() => CurtainDiagnostics.Write("overlay.first-frame-presented",

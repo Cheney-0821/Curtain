@@ -13,12 +13,12 @@
   <img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-0078D4?style=flat-square" />
   <img alt="WinUI 3" src="https://img.shields.io/badge/WinUI-3-536DFE?style=flat-square" />
   <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-6A4C93?style=flat-square" />
-  <img alt="Beta 0.2.0-beta.7" src="https://img.shields.io/badge/release-beta.7-64748b?style=flat-square" />
+  <img alt="Stable 0.3.0" src="https://img.shields.io/badge/release-稳定版%200.3.0-2e8b57?style=flat-square" />
 </p>
 
-**[下载 Windows 测试版](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.2.0-beta.7-Setup.exe)** · **[GitHub 发布页](https://github.com/Cheney-0821/Curtain/releases/tag/v0.2.0-beta.7)** · **[English](README.md)**
+**[下载 Windows 稳定版](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.3.0-Setup.exe)** · **[GitHub 发布页](https://github.com/Cheney-0821/Curtain/releases/tag/v0.3.0)** · **[English](README.md)**
 
-<sub>Windows x64 · 安装包尚未进行代码签名 · 已在 Windows 11 测试</sub>
+<sub>Windows x64 · 稳定版，安装包未签名 · 已在 Windows 10 22H2 与 Windows 11 25H2 测试</sub>
 
 </div>
 
@@ -87,11 +87,11 @@ Curtain 可以根据键盘、鼠标的无操作时长自动开启保护。**什�
 
 ## 安装与使用
 
-1. 从上方下载 [Windows x64 测试版安装程序](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.2.0-beta.7-Setup.exe)。安装包目前**未签名**，Windows 可能提示未知发布者；请核实来源，不要为了安装关闭系统安全防护。
+1. 从上方下载 [Windows x64 稳定版安装程序](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.3.0-Setup.exe)。安装包目前**未签名**，Windows 可能提示未知发布者；请核实来源，不要为了安装关闭系统安全防护。
 2. 启动 Curtain，选择「添加窗口」或「保护整个屏幕」。
 3. 如需离开工位后自动保护，在「设置」中开启空闲自动保护并选择时长及范围。
 
-> 本版本使用的源码提交 SHA 会记录在 GitHub Release 发布说明中。
+> 本版本源码提交 SHA 与安装包 SHA-256 会记录在 GitHub Release 发布说明中。
 
 <details>
 <summary><b>快捷键与兼容性</b></summary>
@@ -103,19 +103,19 @@ Curtain 可以根据键盘、鼠标的无操作时长自动开启保护。**什�
 
 两组快捷键均可自定义。鼠标后退/前进键可选作全屏保护开关，默认关闭。已保存的应用规则会持续保留，应用再次启动时重新绑定窗口；运行中的窗口列表则根据当前运行的应用重建。
 
-Curtain 面向 Windows x64。项目最低目标为 Windows 10 2004（build 19041），但尚未进行独立的 Windows 10 实机兼容测试；目前主要在 Windows 11 环境下开发和测试。
+Curtain 面向 Windows x64，最低支持 Windows 10 2004（build 19041）。本次已在 Windows 10 22H2（build 19045）与 Windows 11 25H2 测试。Windows 10 1903（build 18362）低于最低支持版本，不在本次验证范围内。
 
 </details>
 
 ## 使用边界
 
-Curtain 是一种**视觉隐私遮罩**，并非 Windows 系统锁屏、安全防线，也不能阻止其他程序截图或录屏。部分系统通知或短暂弹窗仍可能在全屏磨砂层级恢复前短暂显示在其上方。标准用户会话下的原生 ETW 跟踪可能需要管理员权限，目前尚未验证成功。Windows 10、混合 DPI、显示器热插拔及复杂多屏环境尚未完成独立实机专项验证；目前主要在 Windows 11 上测试。
+Curtain 是一种**视觉隐私遮罩**，并非 Windows 系统锁屏、安全防线，也不能阻止其他程序截图或录屏。部分系统通知或短暂弹窗仍可能在全屏磨砂层级恢复前短暂显示在其上方。标准用户会话下的原生 ETW 跟踪可能需要管理员权限，目前尚未验证成功。Windows 10 物理设备、混合 DPI、HDR、显示器热插拔、复杂多屏及长时间压力运行尚未完成专项验证。
 
 ## 反馈与开源
 
 Curtain 源码已在 GitHub 公开，并采用 **GPL-3.0-only** 许可证。欢迎通过 [GitHub Issues](https://github.com/Cheney-0821/Curtain/issues) 报告问题或提出改进建议。
 
-当前测试版安装包与应用内更新源由上方官方更新域名提供。请查看 [GitHub 发布页](https://github.com/Cheney-0821/Curtain/releases/tag/v0.2.0-beta.7) 获取版本说明、源码提交 SHA、安装包 SHA-256，以及 GitHub 镜像下载。
+当前稳定版安装包与应用内更新源由上方官方更新域名提供。请查看 [GitHub 发布页](https://github.com/Cheney-0821/Curtain/releases/tag/v0.3.0) 获取版本说明、源码提交 SHA、资产校验值及 GitHub 下载。
 
 ## 许可
 

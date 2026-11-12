@@ -1,6 +1,6 @@
 ﻿param(
     [Parameter(Mandatory = $true)]
-    [ValidatePattern('^\d+\.\d+\.\d+-beta\.\d+(?:\.\d+)*$')]
+    [ValidatePattern('^\d+\.\d+\.\d+(?:-beta\.\d+(?:\.\d+)*)?$')]
     [string]$Version,
     [switch]$PublishOnly,
     [switch]$TestSettings,

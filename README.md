@@ -13,12 +13,12 @@ A lightweight frosted-glass privacy shield for Windows. Cover one window, protec
   <img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-0078D4?style=flat-square" />
   <img alt="WinUI 3" src="https://img.shields.io/badge/WinUI-3-536DFE?style=flat-square" />
   <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-6A4C93?style=flat-square" />
-  <img alt="Beta 0.2.0-beta.7" src="https://img.shields.io/badge/release-beta.7-64748b?style=flat-square" />
+  <img alt="Stable 0.3.0" src="https://img.shields.io/badge/release-stable%200.3.0-2e8b57?style=flat-square" />
 </p>
 
-**[Download for Windows](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.2.0-beta.7-Setup.exe)** · **[GitHub Release](https://github.com/Cheney-0821/Curtain/releases/tag/v0.2.0-beta.7)** · **[简体中文](README.zh-CN.md)**
+**[Download for Windows](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.3.0-Setup.exe)** · **[GitHub Release](https://github.com/Cheney-0821/Curtain/releases/tag/v0.3.0)** · **[简体中文](README.zh-CN.md)**
 
-<sub>Windows x64 · Unsigned beta · Windows 11 tested</sub>
+<sub>Windows x64 · Unsigned stable release · Windows 10 22H2 and Windows 11 25H2 tested</sub>
 
 </div>
 
@@ -88,11 +88,11 @@ Curtain can watch for a period of keyboard and mouse inactivity and start protec
 
 ## Get started
 
-1. **Download** the [current Windows x64 beta installer](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.2.0-beta.7-Setup.exe). This installer is **not code-signed**; Windows may warn that its publisher is unrecognized. Verify the source and do not disable security protections just to install it.
+1. **Download** the [Windows x64 stable installer](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.3.0-Setup.exe). This installer is **not code-signed**; Windows may warn that its publisher is unrecognized. Verify the source and do not disable security protections just to install it.
 2. **Launch Curtain** and choose **Add window** or **Protect entire screen**.
 3. **Set your preferences** in Settings if you want Curtain to activate after inactivity.
 
-> The source commit used for this release is recorded in the GitHub Release notes.
+> The source commit and installer SHA-256 for this release are recorded in the GitHub Release notes.
 
 <details>
 <summary><b>Keyboard shortcuts and compatibility</b></summary>
@@ -104,19 +104,19 @@ Curtain can watch for a period of keyboard and mouse inactivity and start protec
 
 Both shortcuts are customizable. The mouse Back and Forward buttons can optionally toggle fullscreen protection and are off by default. The saved app rules persist and matching windows are rebound when an app starts again; the live list of individual windows is rebuilt from running applications.
 
-Curtain targets Windows x64. The project's minimum Windows target is Windows 10 version 2004 (build 19041), but independent Windows 10 runtime testing has not yet been completed. The current beta has been tested primarily on Windows 11.
+Curtain targets Windows x64. The minimum supported Windows build is Windows 10 2004 (build 19041). This release was tested on Windows 10 22H2 (build 19045) and Windows 11 25H2. Windows 10 1903 (build 18362) is below the minimum and is not supported by this validation.
 
 </details>
 
 ## What Curtain is — and isn't
 
-Curtain is a **visual privacy overlay**, not a Windows sign-in lock, a defense against screenshots/recording, or a security boundary. Some notifications or transient popups may briefly appear above the full-screen overlay before its Z-order is recovered. Native ETW capture may require administrator privileges and is not verified in a standard-user session. Windows 10, mixed-DPI, monitor hot-plug, and complex multi-display behavior have not received separate device validation; Windows 11 is the primary test environment.
+Curtain is a **visual privacy overlay**, not a Windows sign-in lock, a defense against screenshots/recording, or a security boundary. Some notifications or transient popups may briefly appear above the full-screen overlay before its Z-order is recovered. Native ETW capture may require administrator privileges and is not verified in a standard-user session. Physical Windows 10 hardware, mixed DPI, HDR, monitor hot-plug, complex multi-display behavior, and long-running stress behavior have not received separate validation.
 
 ## Feedback and open source
 
 Curtain's source code is publicly available under **GPL-3.0-only**. Use [GitHub Issues](https://github.com/Cheney-0821/Curtain/issues) to report bugs or suggest improvements.
 
-The current beta installer and in-app update feed are hosted on the official update domain above. The [GitHub Release](https://github.com/Cheney-0821/Curtain/releases/tag/v0.2.0-beta.7) includes release notes, the source commit, the installer SHA-256, and a GitHub-hosted installer mirror.
+The stable installer and in-app update feed are hosted on the official update domain above. The [GitHub Release](https://github.com/Cheney-0821/Curtain/releases/tag/v0.3.0) includes release notes, the source commit, asset checksums, and GitHub-hosted downloads.
 
 ## License
 

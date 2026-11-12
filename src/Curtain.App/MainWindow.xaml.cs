@@ -298,7 +298,6 @@ public sealed partial class MainWindow : Window
         Localized.SetAutomationName(PrivacyMouseCombo, "PrivacyMouseHeader");
         SetComboItemContent(PrivacyMouseCombo, "PrivacyMouseOff", "PrivacyMouseBack", "PrivacyMouseForward");
         Localized.SetText(HotkeyEnabledLabelText, "EnableHotkeyHeader");
-        Localized.SetAutomationName(HotkeyEnabledSwitch, "EnableHotkeyHeader");
         Localized.SetText(AboutDescriptionText, "AboutDescription");
         Localized.SetText(UpdatesTitleText, "UpdatesTitle");
         Localized.SetContent(UpdateActionButton, "CheckUpdates");
@@ -324,8 +323,6 @@ public sealed partial class MainWindow : Window
         StartupSwitch.OffContent = off;
         IdleProtectSwitch.OnContent = on;
         IdleProtectSwitch.OffContent = off;
-        HotkeyEnabledSwitch.OnContent = on;
-        HotkeyEnabledSwitch.OffContent = off;
 
         bool wasLoading = _loadingSettings;
         _loadingSettings = true;
@@ -488,12 +485,13 @@ public sealed partial class MainWindow : Window
     private void OnPrivacyHotkey()
     {
         if (_editingHotkey) { _captureRegisteredHotkey?.Invoke(_settings.PrivacyHotkey); return; }
-        TogglePrivacyProtection();
+        TogglePrivacyProtection("Hotkey");
     }
 
-    private void TogglePrivacyProtection()
+    private void TogglePrivacyProtection(string inputSource)
     {
         if (_disposed || _editingHotkey) return;
+        CurtainDiagnostics.Write("fullscreen.toggle.requested", stage: "input-dispatch", reasonCode: inputSource);
         if (_screenPrivacy.IsActive) { ResumeScreen(); return; }
         if (_idleScope.HasValue) { ResumeAutomaticProtection(); return; }
         ToggleManualScreen();
@@ -743,12 +741,6 @@ public sealed partial class MainWindow : Window
             OnNotice("RememberedAppRemoved");
     }
 
-    private void OnSettingChanged(object sender, RoutedEventArgs e)
-    {
-        if (_loadingSettings) return;
-        ReadSettingsAndApply();
-    }
-
     private void OnLanguageSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_loadingSettings || LanguageCombo.SelectedValue is not string selected) return;
@@ -820,23 +812,11 @@ public sealed partial class MainWindow : Window
         CurtainRuntimeStatus.SetStartupRegistrationState(enabled ? "EnabledBackgroundArgument" : "Disabled");
     }
 
-    private void ReadSettingsAndApply()
-    {
-        bool previous = _settings.Hotkey.Enabled;
-        string operationId = CurtainDiagnostics.NewOperationId();
-        _settings = _settings with { Hotkey = _settings.Hotkey with { Enabled = HotkeyEnabledSwitch.IsOn } };
-        if (previous != _settings.Hotkey.Enabled)
-            CurtainDiagnostics.Write("settings.preference.changed", operationId: operationId,
-                stage: "Hotkey.Enabled", reasonCode: _settings.Hotkey.Enabled ? "Enabled" : "Disabled");
-        SaveSettings(operationId); ApplyHotkey();
-    }
-
     private void ApplySettingsToControls()
     {
         StartupSwitch.IsOn = _settings.StartWithWindows;
         AutoUpdateCheck.IsChecked = _settings.AutoDownloadUpdates;
         ApplyAutoProtectionControls();
-        HotkeyEnabledSwitch.IsOn = _settings.Hotkey.Enabled;
         RefreshHotkeyKeycaps();
         LanguageCombo.SelectedValue = _settings.Language;
         PrivacyMouseCombo.SelectedIndex = (int)_settings.PrivacyMouseButton;

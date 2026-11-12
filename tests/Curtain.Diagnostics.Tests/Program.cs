@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Diagnostics.Tracing;
 using System.Reflection;
 using System.Runtime.Loader;
@@ -47,8 +47,8 @@ void Record(string name, string? businessSession = null)
 int passed = 0;
 void Check(bool valid, string name) { if (!valid) throw new Exception("FAIL: " + name); passed++; Console.WriteLine("PASS: " + name); }
 
-Check(Field(identity, "ProductVersion") == "0.2.0-beta.7", "full SemVer comes from product assembly, not test host");
-Check(Field(identity, "FileVersion") == "0.2.0.7" && Field(identity, "AssemblyVersion") == "0.2.0.0", "numeric file version and stable assembly version");
+Check(Field(identity, "ProductVersion") == "0.3.0", "full SemVer comes from product assembly, not test host");
+Check(Field(identity, "FileVersion") == "0.3.0.0" && Field(identity, "AssemblyVersion") == "0.2.0.0", "numeric file version and stable assembly version");
 Check(System.Text.RegularExpressions.Regex.IsMatch(Field(identity, "GitCommit"), "^[a-f0-9]{40}$"), "full Git commit captured");
 Check(Guid.TryParse(Field(identity, "BuildId"), out _) && DateTimeOffset.TryParse(Field(identity, "BuildTimestampUtc"), out _), "unique build id and UTC timestamp captured");
 string dirtyState = Field(identity, "WorkingTreeDirty");
@@ -67,6 +67,7 @@ Check(Field(unknown, "GitCommit") == "Unknown" && Field(unknown, "BuildId") == "
 object Resolve(string? version) => identityType.GetMethod("ResolveFileVersion", methods)!.Invoke(null, [version])!;
 string Tuple(object value, string field) => value.GetType().GetField(field)!.GetValue(value)?.ToString() ?? "";
 Check(Tuple(Resolve("0.2.0.7"), "Item1") == "Exact" && Tuple(Resolve("0.2.0.7"), "Item2") == "0.2.0-beta.7", "unique registered numeric version maps back to beta.7");
+Check(Tuple(Resolve("0.3.0.0"), "Item1") == "Exact" && Tuple(Resolve("0.3.0.0"), "Item2") == "0.3.0", "registered stable numeric version maps back to 0.3.0");
 Check(Tuple(Resolve("0.2.0.0"), "Item1") == "LegacyAmbiguous" && Tuple(Resolve(null), "Item1") == "Unknown" && Tuple(Resolve("0.2.0.8"), "Item1") == "Unknown", "legacy and unregistered versions are never guessed");
 using (var map = JsonDocument.Parse(app.GetManifestResourceStream("Curtain.ReleaseVersionMap")!))
 {
@@ -128,8 +129,8 @@ System.Xml.Linq.XElement Crash(string version, string? time, string? pid)
 }
 var historical = Crash("0.2.0.0", sessionStart.AddDays(-2).ToString("O"), Environment.ProcessId.ToString());
 Check((string?)historical.Attribute("eventTimeRelation") == "BeforeCurrentSessionStart" && (string?)historical.Attribute("versionAttribution") == "LegacyAmbiguous" && historical.Attribute("resolvedProductVersion") is null, "historical Xaml crash never attributed to current beta");
-var exact = Crash("0.2.0.7", sessionStart.AddSeconds(1).ToString("O"), $"0x{Environment.ProcessId:X}");
-Check((string?)exact.Attribute("resolvedProductVersion") == "0.2.0-beta.7" && (string?)exact.Attribute("processCorrelation") == "Matched", "named fault PID plus time and exact version correlate");
+var exact = Crash("0.3.0.0", sessionStart.AddSeconds(1).ToString("O"), $"0x{Environment.ProcessId:X}");
+Check((string?)exact.Attribute("resolvedProductVersion") == "0.3.0" && (string?)exact.Attribute("processCorrelation") == "Matched", "named fault PID plus time and exact version correlate");
 var missing = Crash("", null, null);
 Check((string?)missing.Attribute("eventTimeRelation") == "Unknown" && (string?)missing.Attribute("versionAttribution") == "Unknown" && (string?)missing.Attribute("processCorrelation") == "NotAvailable" && missing.Attribute("faultingProcessId") is null, "System Execution PID is not a fault PID; missing evidence stays unknown");
 Check((string?)Crash("0.2.0.7", sessionStart.AddSeconds(1).ToString("O"), "1").Attribute("processCorrelation") == "OtherProcess", "time alone cannot correlate another process");
@@ -166,7 +167,7 @@ using (var zip = System.IO.Compression.ZipFile.OpenRead(Field(bundle, "ArchivePa
     using var environment = ReadJson("system/environment.json");
     using var manifest = ReadJson("manifest.json");
     Check(new[] { summary, environment, manifest }.All(x => x.RootElement.GetProperty("schemaVersion").GetInt32() == 2), "all three diagnostic schemas upgraded");
-    Check(new[] { summary, environment, manifest }.All(x => x.RootElement.GetProperty("versionIdentity").GetProperty("productVersion").GetString() == "0.2.0-beta.7"), "summary environment and manifest share identity");
+    Check(new[] { summary, environment, manifest }.All(x => x.RootElement.GetProperty("versionIdentity").GetProperty("productVersion").GetString() == "0.3.0"), "summary environment and manifest share identity");
     Check(summary.RootElement.GetProperty("structuredLogWindowHours").GetInt32() == 24 && summary.RootElement.GetProperty("windowsEventWindowDays").GetInt32() == 7, "collection windows explicit");
     foreach (var item in manifest.RootElement.GetProperty("files").EnumerateArray())
     {
@@ -275,6 +276,6 @@ sealed class CaptureListener : EventListener
     { if (source.Name == "Curtain-Privacy") EnableEvents(source, EventLevel.Verbose, EventKeywords.All); }
     protected override void OnEventWritten(EventWrittenEventArgs data)
     { if (data.EventId == 1 && data.PayloadNames is not null && data.Payload is not null)
-        IdentityPayloadSeen |= data.PayloadNames.Contains("appSessionId") && data.PayloadNames.Contains("productVersion") && data.Payload.Contains("0.2.0-beta.7");
+        IdentityPayloadSeen |= data.PayloadNames.Contains("appSessionId") && data.PayloadNames.Contains("productVersion") && data.Payload.Contains("0.3.0");
       if (data.EventId is 1 or 2) { Interlocked.Increment(ref _count); if (data.EventId == 1) Interlocked.Increment(ref _recordCount); else Interlocked.Increment(ref _stateCount); } else if (data.EventId == 0) Console.WriteLine("PROVIDER_SCHEMA_ERROR=" + string.Join(";", data.Payload ?? new System.Collections.ObjectModel.ReadOnlyCollection<object?>([]))); }
 }

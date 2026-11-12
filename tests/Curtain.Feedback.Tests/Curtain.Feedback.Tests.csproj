@@ -7,5 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../src/Curtain.App/Services/DiagnosticFeedbackUploader.cs" Link="DiagnosticFeedbackUploader.cs" />
+    <Compile Include="../../src/Curtain.App/Services/AppBuildIdentity.cs" Link="AppBuildIdentity.cs" />
+    <EmbeddedResource Include="../../release/diagnostic-version-map.json" LogicalName="Curtain.ReleaseVersionMap" />
   </ItemGroup>
 </Project>

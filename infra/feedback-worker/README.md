@@ -23,7 +23,7 @@ Worker 不解压诊断包，只做 ZIP 结构检查。上传对象存入私有 `
 ```powershell
 npm ci
 npm test
-npx wrangler deploy --dry-run
+npx wrangler deploy --dry-run --config wrangler.local.jsonc
 pwsh -File scripts/Test-Feedback.ps1
 ```
 
@@ -32,3 +32,5 @@ pwsh -File scripts/Test-Feedback.ps1
 ## 部署
 
 部署者需要自行配置 Worker 路由、私有 R2 bucket、两个限流绑定及 14 天对象生命周期。`wrangler.jsonc` 是配置示例，须先核对 Cloudflare 账户中的绑定和目标，再部署。不要提交 API token、密钥、用户诊断包或账户凭据。
+
+公开配置中的 YOUR_ 占位符须替换为部署者自己的资源绑定。将配置复制为 wrangler.local.jsonc，填写私有 R2 bucket 和数字限流命名空间。部署时使用 npx wrangler deploy --config wrangler.local.jsonc。

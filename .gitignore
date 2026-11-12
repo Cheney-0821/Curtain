@@ -50,3 +50,13 @@ Thumbs.db
 /docs/reviews/
 /docs/tasks/
 /release/latest.example.json
+
+/docs/CURRENT-STATUS.md
+/docs/MICROSOFT-STORE-DISTRIBUTION-DECISIONS.md
+/docs/REPOSITORY-WORKFLOW.md
+/docs/RELEASING.md
+/experiments/
+/Curtain-B6-Private-Validation/
+/infra/feedback-worker/wrangler.local.jsonc
+
+/Curtain-B6-Private-Validation

@@ -18,7 +18,7 @@ A lightweight frosted-glass privacy shield for Windows. Cover one window, protec
 
 **[Download for Windows](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.3.0-Setup.exe)** · **[GitHub Release](https://github.com/Cheney-0821/Curtain/releases/tag/v0.3.0)** · **[简体中文](README.zh-CN.md)**
 
-<sub>Windows x64 · Unsigned stable release · Windows 10 22H2 and Windows 11 25H2 tested</sub>
+<sub>Windows x64 · Stable release · Supports Windows 10 and Windows 11</sub>
 
 </div>
 
@@ -104,13 +104,13 @@ Curtain can watch for a period of keyboard and mouse inactivity and start protec
 
 Both shortcuts are customizable. The mouse Back and Forward buttons can optionally toggle fullscreen protection and are off by default. The saved app rules persist and matching windows are rebound when an app starts again; the live list of individual windows is rebuilt from running applications.
 
-Curtain targets Windows x64. The minimum supported Windows build is Windows 10 2004 (build 19041). This release was tested on Windows 10 22H2 (build 19045) and Windows 11 25H2.
+Curtain targets Windows x64. The minimum supported Windows build is Windows 10 2004 (build 19041).
 
 </details>
 
 ## What Curtain is — and isn't
 
-Curtain is a **visual privacy overlay**, not a Windows sign-in lock, a defense against screenshots/recording, or a security boundary. Some notifications or transient popups may briefly appear above the full-screen overlay before its Z-order is recovered. Native ETW capture may require administrator privileges and is not verified in a standard-user session. Physical Windows 10 hardware, mixed DPI, HDR, monitor hot-plug, complex multi-display behavior, and long-running stress behavior have not received separate validation.
+Curtain is a **visual privacy overlay**, not a Windows sign-in lock or a defense against screenshots and screen recording.
 
 ## Feedback and open source
 

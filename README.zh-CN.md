@@ -18,7 +18,7 @@
 
 **[下载 Windows 稳定版](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.3.0-Setup.exe)** · **[GitHub 发布页](https://github.com/Cheney-0821/Curtain/releases/tag/v0.3.0)** · **[English](README.md)**
 
-<sub>Windows x64 · 稳定版，安装包未签名 · 已在 Windows 10 22H2 与 Windows 11 25H2 测试</sub>
+<sub>Windows x64 · 稳定版 · 支持 Windows 10 与 Windows 11</sub>
 
 </div>
 
@@ -103,13 +103,13 @@ Curtain 可以根据键盘、鼠标的无操作时长自动开启保护。**什�
 
 两组快捷键均可自定义。鼠标后退/前进键可选作全屏保护开关，默认关闭。已保存的应用规则会持续保留，应用再次启动时重新绑定窗口；运行中的窗口列表则根据当前运行的应用重建。
 
-Curtain 面向 Windows x64，最低支持 Windows 10 2004（build 19041）。本次已在 Windows 10 22H2（build 19045）与 Windows 11 25H2 测试。
+Curtain 面向 Windows x64，最低支持 Windows 10 2004（build 19041）。
 
 </details>
 
 ## 使用边界
 
-Curtain 是一种**视觉隐私遮罩**，并非 Windows 系统锁屏、安全防线，也不能阻止其他程序截图或录屏。部分系统通知或短暂弹窗仍可能在全屏磨砂层级恢复前短暂显示在其上方。标准用户会话下的原生 ETW 跟踪可能需要管理员权限，目前尚未验证成功。Windows 10 物理设备、混合 DPI、HDR、显示器热插拔、复杂多屏及长时间压力运行尚未完成专项验证。
+Curtain 是一种**视觉隐私遮罩**，并非 Windows 系统锁屏，也不能阻止其他程序截图或录屏。
 
 ## 反馈与开源
 

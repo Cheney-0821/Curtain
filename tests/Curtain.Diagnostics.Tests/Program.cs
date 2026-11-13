@@ -130,8 +130,8 @@ System.Xml.Linq.XElement Crash(string version, string? time, string? pid)
 }
 var historical = Crash("0.2.0.0", sessionStart.AddDays(-2).ToString("O"), Environment.ProcessId.ToString());
 Check((string?)historical.Attribute("eventTimeRelation") == "BeforeCurrentSessionStart" && (string?)historical.Attribute("versionAttribution") == "LegacyAmbiguous" && historical.Attribute("resolvedProductVersion") is null, "historical Xaml crash never attributed to current beta");
-var exact = Crash("0.3.0.0", sessionStart.AddSeconds(1).ToString("O"), $"0x{Environment.ProcessId:X}");
-Check((string?)exact.Attribute("resolvedProductVersion") == "0.3.0" && (string?)exact.Attribute("processCorrelation") == "Matched", "named fault PID plus time and exact version correlate");
+var exact = Crash("0.3.1.0", sessionStart.AddSeconds(1).ToString("O"), $"0x{Environment.ProcessId:X}");
+Check((string?)exact.Attribute("resolvedProductVersion") == "0.3.1" && (string?)exact.Attribute("processCorrelation") == "Matched", "named fault PID plus time and exact version correlate");
 var missing = Crash("", null, null);
 Check((string?)missing.Attribute("eventTimeRelation") == "Unknown" && (string?)missing.Attribute("versionAttribution") == "Unknown" && (string?)missing.Attribute("processCorrelation") == "NotAvailable" && missing.Attribute("faultingProcessId") is null, "System Execution PID is not a fault PID; missing evidence stays unknown");
 Check((string?)Crash("0.2.0.7", sessionStart.AddSeconds(1).ToString("O"), "1").Attribute("processCorrelation") == "OtherProcess", "time alone cannot correlate another process");

@@ -13,10 +13,10 @@ A lightweight frosted-glass privacy shield for Windows. Cover one window, protec
   <img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-0078D4?style=flat-square" />
   <img alt="WinUI 3" src="https://img.shields.io/badge/WinUI-3-536DFE?style=flat-square" />
   <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-6A4C93?style=flat-square" />
-  <img alt="Stable 0.3.0" src="https://img.shields.io/badge/release-stable%200.3.0-2e8b57?style=flat-square" />
+  <img alt="Stable 0.3.1" src="https://img.shields.io/badge/release-stable%200.3.1-2e8b57?style=flat-square" />
 </p>
 
-**[Download for Windows](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.3.0-Setup.exe)** · **[GitHub Release](https://github.com/Cheney-0821/Curtain/releases/tag/v0.3.0)** · **[简体中文](README.zh-CN.md)**
+**[Download for Windows](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.3.1-Setup.exe)** · **[GitHub Release](https://github.com/Cheney-0821/Curtain/releases/tag/v0.3.1)** · **[简体中文](README.zh-CN.md)**
 
 <sub>Windows x64 · Stable release · Supports Windows 10 and Windows 11</sub>
 
@@ -88,7 +88,7 @@ Curtain can watch for a period of keyboard and mouse inactivity and start protec
 
 ## Get started
 
-1. **Download** the [Windows x64 stable installer](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.3.0-Setup.exe). This installer is **not code-signed**; Windows may warn that its publisher is unrecognized. Verify the source and do not disable security protections just to install it.
+1. **Download** the [Windows x64 stable installer](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.3.1-Setup.exe). This installer is **not code-signed**; Windows may warn that its publisher is unrecognized. Verify the source and do not disable security protections just to install it.
 2. **Launch Curtain** and choose **Add window** or **Protect entire screen**.
 3. **Set your preferences** in Settings if you want Curtain to activate after inactivity.
 
@@ -116,7 +116,7 @@ Curtain is a **visual privacy overlay**, not a Windows sign-in lock or a defense
 
 Curtain's source code is publicly available under **GPL-3.0-only**. Use [GitHub Issues](https://github.com/Cheney-0821/Curtain/issues) to report bugs or suggest improvements.
 
-The stable installer and in-app update feed are hosted on the official update domain above. The [GitHub Release](https://github.com/Cheney-0821/Curtain/releases/tag/v0.3.0) includes release notes, the source commit, asset checksums, and GitHub-hosted downloads.
+The stable installer and in-app update feed are hosted on the official update domain above. The [GitHub Release](https://github.com/Cheney-0821/Curtain/releases/tag/v0.3.1) includes release notes, the source commit, asset checksums, and GitHub-hosted downloads.
 
 ## License
 

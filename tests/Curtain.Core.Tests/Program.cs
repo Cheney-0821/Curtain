@@ -361,4 +361,5 @@ Check(System.Text.Json.JsonSerializer.Deserialize<CurtainUserSettings>(dualShort
     "custom privacy shortcut survives serialization");
 passed += ProtectedAppRuleTests.Run();
 passed += FullscreenInteractionTests.Run();
+passed += AutoBindWindowPolicyTests.Run();
 Console.WriteLine($"OK: {passed} assertions passed.");

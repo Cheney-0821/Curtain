@@ -229,9 +229,10 @@ internal sealed class ProtectedAppRuleAutoBinder : IDisposable
             return;
         }
 
-        WindowSelectionResult selectable = WindowSelectionEvaluator.Evaluate(hwnd);
+        WindowSelectionResult selectable = AutoBindWindowEvaluator.Evaluate(hwnd);
         if (!selectable.IsSelectable)
         {
+            _attachRetryByHandle.Remove(handle);
             RecordFailureOnce(hwnd, selectable.ReasonCode, selectable.Win32Error != 0 ? selectable.Win32Error : selectable.HResult, rule.RuleId.ToString("N"));
             return;
         }

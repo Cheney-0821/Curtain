@@ -22,6 +22,8 @@ internal sealed class CurtainWindow
     private readonly Compositor _compositor;
     private readonly DesktopWindowTarget _target;
     private readonly SpriteVisual _visual;
+    private readonly CompositionRoundedRectangleGeometry? _cornerGeometry;
+    private readonly CompositionGeometricClip? _cornerClip;
     private CompositionBackdropBrush _backdrop;
     private readonly CompositionEffectFactory _factory;
     private CompositionEffectBrush _effect;
@@ -82,6 +84,7 @@ internal sealed class CurtainWindow
             {
                 int disabled = 0;
                 Marshal.ThrowExceptionForHR(DwmSetWindowAttribute(Handle, 17, ref disabled, 4));
+                NativeMethods.TrySetCornerPreference(Handle, NativeMethods.DWMWCP_DONOTROUND);
             }
             stage = "extend-frame";
             var margins = new Margins { Left = -1, Right = -1, Top = -1, Bottom = -1 };
@@ -92,6 +95,13 @@ internal sealed class CurtainWindow
             try { _target = MarshalInterface<DesktopWindowTarget>.FromAbi(raw); }
             finally { if (raw != 0) Marshal.Release(raw); }
             _visual = _compositor.CreateSpriteVisual(); _visual.Size = Vector2.One;
+            if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000))
+            {
+                // Round only the rendered surface; DWM rounding also adds a second shadow.
+                _cornerGeometry = _compositor.CreateRoundedRectangleGeometry();
+                _cornerClip = _compositor.CreateGeometricClip(_cornerGeometry);
+                UpdateCornerClip();
+            }
             stage = "backdrop-brush";
             _backdrop = _compositor.CreateBackdropBrush();
             using var blur = new GaussianBlurEffect { Name = "Blur", BlurAmount = 0,
@@ -117,7 +127,7 @@ internal sealed class CurtainWindow
                 targetProcessId: (int)_protectedProcessId, sessionId: _sessionId, ruleId: _ruleId);
             _messages?.Dispose(); _input?.Dispose(); _timer?.Stop();
             if (_target is not null) _target.Root = null;
-            _effect?.Dispose(); _factory?.Dispose(); _backdrop?.Dispose(); _visual?.Dispose();
+            _effect?.Dispose(); _factory?.Dispose(); _backdrop?.Dispose(); _cornerClip?.Dispose(); _cornerGeometry?.Dispose(); _visual?.Dispose();
             _target?.Dispose(); _compositor?.Dispose();
             HandleNative.DestroyWindow(Handle); throw;
         }
@@ -339,7 +349,11 @@ internal sealed class CurtainWindow
     {
         if (_disposed) return;
         if (message == 0x0005 && GetClientRect(Handle, out var client))
+        {
             _visual.Size = new Vector2(Math.Max(1, client.Right - client.Left), Math.Max(1, client.Bottom - client.Top));
+            UpdateCornerClip();
+        }
+        else if (message == 0x02E0) UpdateCornerClip();
         else if (message == 0x0201 && !_settings.AllowClickThrough)
         {
             SetCapture(Handle);
@@ -372,15 +386,23 @@ internal sealed class CurtainWindow
     {
         if (_lastMaximized == maximized) return;
         _lastMaximized = maximized;
-        NativeMethods.TrySetCornerPreference(Handle, maximized ? NativeMethods.DWMWCP_DONOTROUND : NativeMethods.DWMWCP_ROUND);
+        UpdateCornerClip();
+    }
+    private void UpdateCornerClip()
+    {
+        if (_cornerGeometry is null || _cornerClip is null) return;
+        _cornerGeometry.Size = _visual.Size;
+        float radius = 8 * Math.Max(96, NativeMethods.GetDpiForWindow(Handle)) / 96f;
+        _cornerGeometry.CornerRadius = new Vector2(radius);
+        _visual.Clip = _lastMaximized == true ? null : _cornerClip;
     }
     internal void CloseOwnedWindow()
     {
         if (_disposed) return;
         CancelAndHide(); _disposed = true;
         _timer.Stop(); _messages.Dispose(); _input.Dispose(); NotifyFirstFrame();
-        _target.Root = null; _visual.Brush = null;
-        _effect.Dispose(); _factory.Dispose(); _backdrop.Dispose(); _visual.Dispose(); _target.Dispose(); _compositor.Dispose();
+        _target.Root = null; _visual.Brush = null; _visual.Clip = null;
+        _effect.Dispose(); _factory.Dispose(); _backdrop.Dispose(); _cornerClip?.Dispose(); _cornerGeometry?.Dispose(); _visual.Dispose(); _target.Dispose(); _compositor.Dispose();
         if (NativeMethods.IsWindow(Handle)) HandleNative.DestroyWindow(Handle);
     }
     [ComImport, Guid("29E691FA-4567-4DCA-B319-D0F207EB6807"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]

@@ -15,9 +15,9 @@
     <Platforms>x64</Platforms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version Condition="'$(Version)' == ''">0.3.0</Version>
+    <Version Condition="'$(Version)' == ''">0.3.1</Version>
     <AssemblyVersion>0.2.0.0</AssemblyVersion>
-    <FileVersion Condition="'$(FileVersion)' == ''">0.3.0.0</FileVersion>
+    <FileVersion Condition="'$(FileVersion)' == ''">0.3.1.0</FileVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <CurtainDistributionKind Condition="'$(CurtainDistributionKind)' == ''">Development</CurtainDistributionKind>
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>

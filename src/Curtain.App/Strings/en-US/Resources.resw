@@ -511,4 +511,17 @@
   <data name="PrivacyMouseBack" xml:space="preserve"><value>Back button</value></data>
   <data name="PrivacyMouseForward" xml:space="preserve"><value>Forward button</value></data>
   <data name="PrivacyMouseFailed" xml:space="preserve"><value>Unable to enable the side button. Your previous setting is unchanged.</value></data>
+  <data name="ClearRegionHeader" xml:space="preserve"><value>Clear areas</value></data>
+  <data name="PickerAlreadyAdded" xml:space="preserve"><value>This window is already added.</value></data>
+  <data name="ClearRegionHint" xml:space="preserve"><value>Keep selected areas of the window clear for easier reading.</value></data>
+  <data name="ClearRegionEdit" xml:space="preserve"><value>Edit areas</value></data>
+  <data name="ClearRegionDrawPrompt" xml:space="preserve"><value>Draw a rectangle</value></data>
+  <data name="ClearRegionDrawMenu" xml:space="preserve"><value>Draw a clear area</value></data>
+  <data name="RemoveWindowProtection" xml:space="preserve"><value>Remove protection from this window</value></data>
+  <data name="ClearRegionWindowOption" xml:space="preserve"><value>{0}. {1}</value></data>
+  <data name="ClearRegionRemove" xml:space="preserve"><value>Remove this area</value></data>
+  <data name="ClearRegionRemoveAll" xml:space="preserve"><value>Remove all areas</value></data>
+  <data name="ClearRegionCancel" xml:space="preserve"><value>Cancel editing</value></data>
+  <data name="ClearRegionSaved" xml:space="preserve"><value>Clear areas saved for this window.</value></data>
+  <data name="ClearRegionUnavailable" xml:space="preserve"><value>Open the target window before editing its clear areas.</value></data>
 </root>

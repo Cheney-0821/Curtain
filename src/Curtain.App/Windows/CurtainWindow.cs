@@ -14,7 +14,7 @@ using WinRT;
 namespace Curtain.App.Windows;
 
 // An independent desktop backdrop host; no target-window capture.
-internal sealed class CurtainWindow
+internal sealed partial class CurtainWindow
 {
     private const string ClassName = "Curtain.Gaussian.Overlay";
     private static readonly HandleNative.WindowProc Procedure = HandleNative.DefWindowProcW;
@@ -44,6 +44,7 @@ internal sealed class CurtainWindow
     private double _ramp, _from, _to, _duration;
     private long _started;
     private bool _pendingShow;
+    private ProtectionContextMenu? _protectionMenu;
     private int _showGeneration, _warmupTicks;
     private int _pendingBackdropGeneration;
     internal event Action? RenderFailed;
@@ -55,6 +56,7 @@ internal sealed class CurtainWindow
     public event Action<PixelPoint>? SurfacePressed;
     public event Action<PixelPoint>? SurfaceMoved;
     public event Action? SurfaceEnded;
+    internal event Action<PixelPoint>? ProtectionMenuRequested;
 
     public CurtainWindow(DispatcherQueue dispatcher, long protectedWindowHandle, uint protectedProcessId,
         string operationId, string sessionId, string? ruleId)
@@ -115,7 +117,7 @@ internal sealed class CurtainWindow
             ownerHwnd: _protectedWindowHandle, targetProcessId: (int)protectedProcessId,
             sessionId: _sessionId, ruleId: _ruleId);
             _input = new OverlayOpacityFade(Handle, dispatcher);
-            _messages = new WindowMessageHost(Handle); _messages.AfterMessage += OnMessage;
+            _messages = new WindowMessageHost(Handle, HandleEditorCursor); _messages.AfterMessage += OnMessage;
             _timer = dispatcher.CreateTimer(); _timer.Interval = TimeSpan.FromMilliseconds(16); _timer.IsRepeating = true;
             _timer.Tick += (_, _) => Tick();
         }
@@ -170,6 +172,7 @@ internal sealed class CurtainWindow
     internal void SetProtectedVisible(bool visible, bool animate, long? batchStart = null)
     {
         if (_disposed || (_desiredVisible == visible && (_running || _pendingShow || IsVisible == visible))) return;
+        if (!visible) _protectionMenu?.Dismiss();
         CurtainDiagnostics.Write("overlay.visibility.requested", operationId: _operationId,
             stage: "window-protection",
             reasonCode: visible ? (animate ? "ShowAnimated" : "ShowImmediate") : (animate ? "HideAnimated" : "HideImmediate"),
@@ -315,6 +318,7 @@ internal sealed class CurtainWindow
     internal void CancelAndHide()
     {
         if (_disposed) return;
+        _protectionMenu?.Dismiss();
         bool wasPending = _pendingShow;
         bool wasRunning = _running;
         bool wasActive = wasPending || wasRunning || _desiredVisible || NativeMethods.IsWindowVisible(Handle);
@@ -352,8 +356,17 @@ internal sealed class CurtainWindow
         {
             _visual.Size = new Vector2(Math.Max(1, client.Right - client.Left), Math.Max(1, client.Bottom - client.Top));
             UpdateCornerClip();
+            UpdateClearRegionSurface();
         }
-        else if (message == 0x02E0) UpdateCornerClip();
+        else if (message == 0x02E0)
+        {
+            UpdateCornerClip();
+            UpdateClearRegionSurface();
+        }
+        else if (IsEditingClearRegions) HandleRegionEditorMessage(message, wParam);
+        else if (message == 0x0205 && CanOpenProtectionMenu && !HasSurfaceCapture &&
+                 NativeMethods.GetCursorPos(out var menuPoint))
+            ProtectionMenuRequested?.Invoke(new(menuPoint.X, menuPoint.Y));
         else if (message == 0x0201 && !_settings.AllowClickThrough)
         {
             SetCapture(Handle);
@@ -365,6 +378,29 @@ internal sealed class CurtainWindow
         else if (message == 0x000F && !_firstPaintQueued && IsVisible)
         { _firstPaintQueued = true; _dispatcher.TryEnqueue(NotifyFirstFrame); }
     }
+    private bool CanOpenProtectionMenu => !_disposed && _clearRegionsAllowed && _desiredVisible &&
+        IsVisible && !IsEditingClearRegions && !_settings.AllowClickThrough;
+
+    internal void ShowProtectionMenu(PixelPoint point, Action draw,
+        Action<WindowProtectionSettings> configure, Action remove)
+    {
+        if (!CanOpenProtectionMenu) return;
+        _protectionMenu?.Dismiss();
+        try
+        {
+            _protectionMenu = new(_settings, draw, configure, remove, () => _protectionMenu = null);
+            _protectionMenu.Show(Handle, point, () => CurtainDiagnostics.Write("overlay.protection-menu.opened",
+                operationId: _operationId, stage: "window-protection", reasonCode: "Ready",
+                hwnd: Handle.ToInt64(), ownerHwnd: _protectedWindowHandle, sessionId: _sessionId, ruleId: _ruleId));
+        }
+        catch (Exception ex)
+        {
+            _protectionMenu?.Dismiss();
+            CurtainDiagnostics.WriteException("overlay.protection-menu.failed", ex, operationId: _operationId,
+                stage: "window-protection", sessionId: _sessionId, ruleId: _ruleId);
+        }
+    }
+
     internal bool WaitForFirstFrame(Action callback)
     {
         if (_disposed || _firstFramePresented) return false;
@@ -399,6 +435,7 @@ internal sealed class CurtainWindow
     internal void CloseOwnedWindow()
     {
         if (_disposed) return;
+        if (IsEditingClearRegions) EndClearRegionEdit(save: false, notify: false);
         CancelAndHide(); _disposed = true;
         _timer.Stop(); _messages.Dispose(); _input.Dispose(); NotifyFirstFrame();
         _target.Root = null; _visual.Brush = null; _visual.Clip = null;

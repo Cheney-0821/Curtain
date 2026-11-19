@@ -1,5 +1,6 @@
 ﻿using System.Collections.ObjectModel;
 using Curtain.App.Interop;
+using Curtain.Core.Geometry;
 using Curtain.Core.Sessions;
 using Curtain.Core.Settings;
 using Microsoft.UI.Dispatching;
@@ -24,6 +25,7 @@ internal sealed class CurtainManager : IDisposable
     public ObservableCollection<ProtectedWindowItem> Windows { get; } = new();
     public event Action<string>? Notice;
     public event Action? CollectionChanged;
+    internal event Action<CurtainSession, PixelPoint>? ProtectionMenuRequested;
     internal CurtainManager(DispatcherQueue dispatcher)
     {
         _dispatcher = dispatcher;
@@ -77,6 +79,7 @@ internal sealed class CurtainManager : IDisposable
             if (_idleForcedClosed) session.SetIdleForcedClosed(true);
             session.Ended += OnEnded;
             session.Notice += OnNotice;
+            session.ProtectionMenuRequested += OnProtectionMenuRequested;
             _sessions.Add(identity.Handle, session);
             Windows.Add(session.Item);
             UpdateRuntimeWindowCounts();
@@ -94,6 +97,10 @@ internal sealed class CurtainManager : IDisposable
             session?.Dispose(); _registry.Remove(target); throw;
         }
     }
+    internal bool HasSession(WindowIdentity identity) =>
+        _sessions.TryGetValue(identity.Handle, out var session) &&
+        !session.IsDestroyed && session.Target.Identity == identity;
+
     internal nint ResolveProtectedWindow(nint hwnd)
     {
         foreach (var session in _sessions.Values)
@@ -143,6 +150,7 @@ internal sealed class CurtainManager : IDisposable
     }
 
     private void OnNotice(string message) => Notice?.Invoke(message);
+    private void OnProtectionMenuRequested(CurtainSession session, PixelPoint point) => ProtectionMenuRequested?.Invoke(session, point);
 
     private void OnEnded(CurtainSession session, string message)
     {
@@ -166,6 +174,7 @@ internal sealed class CurtainManager : IDisposable
         _sessions.Remove(session.Target.Identity.Handle);
         session.Ended -= OnEnded;
         session.Notice -= OnNotice;
+        session.ProtectionMenuRequested -= OnProtectionMenuRequested;
         bool cleanupSucceeded = true;
         try
         {

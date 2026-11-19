@@ -511,4 +511,17 @@
   <data name="PrivacyMouseBack" xml:space="preserve"><value>后退键</value></data>
   <data name="PrivacyMouseForward" xml:space="preserve"><value>前进键</value></data>
   <data name="PrivacyMouseFailed" xml:space="preserve"><value>未能启用侧键，原设置已保留。</value></data>
+  <data name="ClearRegionHeader" xml:space="preserve"><value>局部清晰</value></data>
+  <data name="PickerAlreadyAdded" xml:space="preserve"><value>已添加此窗口。</value></data>
+  <data name="ClearRegionHint" xml:space="preserve"><value>自定义区域保持清晰，方便阅读窗口中的指定内容。</value></data>
+  <data name="ClearRegionEdit" xml:space="preserve"><value>编辑区域</value></data>
+  <data name="ClearRegionDrawPrompt" xml:space="preserve"><value>请绘制区域</value></data>
+  <data name="ClearRegionDrawMenu" xml:space="preserve"><value>绘制清晰区域</value></data>
+  <data name="RemoveWindowProtection" xml:space="preserve"><value>移除此窗口的保护</value></data>
+  <data name="ClearRegionWindowOption" xml:space="preserve"><value>{0}. {1}</value></data>
+  <data name="ClearRegionRemove" xml:space="preserve"><value>移除此区域</value></data>
+  <data name="ClearRegionRemoveAll" xml:space="preserve"><value>移除所有区域</value></data>
+  <data name="ClearRegionCancel" xml:space="preserve"><value>取消编辑</value></data>
+  <data name="ClearRegionSaved" xml:space="preserve"><value>已保存此窗口的清晰区域。</value></data>
+  <data name="ClearRegionUnavailable" xml:space="preserve"><value>请先打开目标窗口，再编辑清晰区域。</value></data>
 </root>

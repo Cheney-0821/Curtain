@@ -46,6 +46,7 @@ internal sealed class CurtainSession : IDisposable
     public ProtectedWindowItem Item { get; }
     public bool IsDestroyed => _disposed || _hooks?.IsDestroyed == true;
     public event Action<CurtainSession, string>? Ended;
+    internal event Action<CurtainSession, PixelPoint>? ProtectionMenuRequested;
     public event Action<string>? Notice;
     internal bool WaitForFirstFrame(Action callback) => _curtain?.WaitForFirstFrame(callback) == true;
 
@@ -81,6 +82,7 @@ internal sealed class CurtainSession : IDisposable
             _curtain.SurfacePressed += OnPressed;
             _curtain.SurfaceMoved += OnMoved;
             _curtain.SurfaceEnded += CancelGesture;
+            _curtain.ProtectionMenuRequested += RequestProtectionMenu;
             _pin = new PinWindow();
             _pin.ToggleRequested += Toggle;
             stage = "owner-assignment";
@@ -168,6 +170,33 @@ internal sealed class CurtainSession : IDisposable
         _defaults = defaults;
         if (CustomProtection is null) RefreshSafely();
     }
+
+    internal bool BeginClearRegionEdit(Action<bool> finished)
+    {
+        if (IsDestroyed || _idleForcedClosed || _curtain is not { } curtain ||
+            !IsCurrent() || NativeMethods.GetVisibleBounds(Handle) is not { } bounds) return false;
+        CancelGesture();
+        int dpi = Math.Max(96, (int)NativeMethods.GetDpiForWindow(Handle));
+        bool started = curtain.BeginClearRegionEdit(bounds, dpi, saved =>
+        {
+            _lastAppliedProtectionState = null;
+            RefreshSafely();
+            finished(saved);
+        });
+        if (started) RefreshSafely();
+        return started;
+    }
+
+    internal void CancelClearRegionEdit() => _curtain?.EndClearRegionEdit(save: false);
+
+    private void RequestProtectionMenu(PixelPoint point) => ProtectionMenuRequested?.Invoke(this, point);
+
+    internal void ShowProtectionMenu(PixelPoint point, Action draw, Action<WindowProtectionSettings> configure, Action remove)
+    {
+        if (!IsDestroyed && Target.IsClosed && !_idleForcedClosed)
+            _curtain?.ShowProtectionMenu(point, draw, configure, remove);
+    }
+
     internal void SetIdleForcedClosed(bool active, bool animate = false)
     {
         if (_disposed || _idleForcedClosed == active) return;
@@ -237,6 +266,7 @@ internal sealed class CurtainSession : IDisposable
         if (bounds is null)
         {
             CancelGesture();
+            CancelClearRegionEdit();
             NativeMethods.ShowWindow(_pin.Handle, NativeMethods.SW_HIDE);
             _curtain.CancelAndHide();
             _lastAppliedProtectionState = null;
@@ -267,12 +297,22 @@ internal sealed class CurtainSession : IDisposable
         }
         if (_lastClosed != Target.IsClosed) { _lastClosed = Target.IsClosed; _pin.UpdateState(Target.IsClosed); }
         _pin.UpdatePlacement(placement, dpi);
+        if (_curtain.IsEditingClearRegions)
+        {
+            NativeMethods.SetWindowPos(_curtain.Handle, 0, bounds.Value.Left, bounds.Value.Top,
+                bounds.Value.Width, bounds.Value.Height, NativeMethods.SWP_NOZORDER | NativeMethods.SWP_NOACTIVATE);
+            _curtain.SetTargetMaximized(NativeMethods.IsZoomed(Handle));
+            _curtain.UpdateRegionEditorTarget(bounds.Value, dpi);
+            NativeMethods.ShowWindow(_pin.Handle, NativeMethods.SW_HIDE);
+            return;
+        }
         if (!NativeMethods.PositionAbove(_curtain.Handle, Handle, bounds.Value, showWindow: false))
             CurtainDiagnostics.Write("overlay.position.failed", CurtainDiagnosticLevel.Warning,
                 operationId: _operationId, stage: "position-above-target", reasonCode: "PositionAboveFailed",
                 hwnd: _curtain.Handle.ToInt64(), targetProcessId: (int)Target.Identity.ProcessId,
                 errorCode: Marshal.GetLastPInvokeError(), sessionId: SessionId, ruleId: _ruleId);
         _curtain.SetTargetMaximized(NativeMethods.IsZoomed(Handle));
+        _curtain.AllowClearRegions(!_idleForcedClosed);
         _curtain.ConfigureWorkingProtection(_idleForcedClosed ? new WindowProtectionSettings() : EffectiveProtection);
         nint pinAnchor = Target.IsClosed || _curtain.IsVisible ? _curtain.Handle : Handle;
         NativeMethods.PositionAbove(_pin.Handle, pinAnchor, placement.Bounds);
@@ -374,6 +414,7 @@ internal sealed class CurtainSession : IDisposable
                 curtain.RenderFailed -= OnRenderFailed;
                 curtain.FirstFramePresented -= OnFirstFramePresented;
                 curtain.SurfacePressed -= OnPressed; curtain.SurfaceMoved -= OnMoved;
+                curtain.ProtectionMenuRequested -= RequestProtectionMenu;
                 curtain.SurfaceEnded -= CancelGesture;
             });
             Release("overlay-hide", curtain.CancelAndHide);

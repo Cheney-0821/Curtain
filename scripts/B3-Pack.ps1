@@ -101,7 +101,9 @@ dotnet tool run vpk -- pack --packId CurtainPrivacy `
   --outputDir $releaseFeed
 if ($LASTEXITCODE -ne 0) { throw 'vpk pack failed' }
 
-Get-ChildItem $releaseFeed -Filter '*Setup.exe' | Copy-Item -Destination $installerArchive -Force
+$payload = Join-Path $releaseFeed 'CurtainPrivacy-win-Setup.exe'
+$setup = Join-Path $installerArchive "CurtainPrivacy-$Version-Setup.exe"
+& (Join-Path $PSScriptRoot 'Build-CurtainSetup.ps1') -PayloadPath $payload -OutputPath $setup -Version $Version -FileVersion $fileVersion
 Write-Host "Release feed: $releaseFeed"
 Write-Host "Installer archive: $installerArchive"
 Write-Host 'This public source candidate does not provide an upload script. Release is handled by the project maintainer using a separate release process.'

@@ -99,7 +99,53 @@
                                         </controls:SettingsCard>
                                     </curtain:ScrollAwareSettingsExpander.Items>
                                 </curtain:ScrollAwareSettingsExpander>
-                                <StackPanel x:Name="GlobalProtectionHost" Spacing="6" />
+                                <TextBlock x:Name="CandidateText" Visibility="Collapsed" TextWrapping="Wrap" Opacity="0.7" />
+                                <InfoBar x:Name="ProtectionWarning" Severity="Warning" Visibility="Collapsed" IsOpen="False" Closed="OnProtectionWarningClosed" />
+                                <StackPanel x:Name="GlobalProtectionHost" Spacing="4">
+                                    <curtain:ScrollAwareSettingsExpander>
+                                        <curtain:ScrollAwareSettingsExpander.Header>
+                                            <TextBlock x:Name="AutoProtectionTitleText" Style="{StaticResource BodyTextBlockStyle}" TextWrapping="Wrap" />
+                                        </curtain:ScrollAwareSettingsExpander.Header>
+                                        <curtain:ScrollAwareSettingsExpander.Description>
+                                            <TextBlock x:Name="IdleProtectHintText" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap" />
+                                        </curtain:ScrollAwareSettingsExpander.Description>
+                                        <curtain:ScrollAwareSettingsExpander.HeaderIcon>
+                                            <PathIcon Width="20" Height="20" Data="F0 M10,0 A10,10 0 1 1 10,20 A10,10 0 1 1 10,0 Z M10,1.5 A8.5,8.5 0 1 1 10,18.5 A8.5,8.5 0 1 1 10,1.5 Z M9.25,4 L10.75,4 L10.75,9.25 L15,9.25 L15,10.75 L9.25,10.75 Z" />
+                                        </curtain:ScrollAwareSettingsExpander.HeaderIcon>
+                                        <ToggleSwitch x:Name="IdleProtectSwitch" MinWidth="0" Toggled="OnAutoProtectionChanged" VerticalAlignment="Center" HorizontalAlignment="Right" />
+                                        <curtain:ScrollAwareSettingsExpander.Items>
+                                            <controls:SettingsCard>
+                                                <controls:SettingsCard.Header>
+                                                    <TextBlock x:Name="IdleMinutesLabelText" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                                </controls:SettingsCard.Header>
+                                                <ComboBox x:Name="IdleMinutesCombo" HorizontalAlignment="Right" VerticalAlignment="Center" MinWidth="136" SelectedValuePath="Tag" SelectionChanged="OnAutoProtectionScopeChanged">
+                                                    <ComboBoxItem Tag="1" />
+                                                    <ComboBoxItem Tag="3" />
+                                                    <ComboBoxItem Tag="5" />
+                                                    <ComboBoxItem Tag="10" />
+                                                </ComboBox>
+                                                <controls:SettingsCard.Description>
+                                                    <TextBlock x:Name="IdleMinutesHintText" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap" />
+                                                </controls:SettingsCard.Description>
+                                                <controls:SettingsCard.HeaderIcon>
+                                                    <PathIcon Width="20" Height="20" Data="F0 M10,0 A10,10 0 1 1 10,20 A10,10 0 1 1 10,0 Z M10,1.5 A8.5,8.5 0 1 1 10,18.5 A8.5,8.5 0 1 1 10,1.5 Z M9.25,4 L10.75,4 L10.75,9.25 L15,9.25 L15,10.75 L9.25,10.75 Z" />
+                                                </controls:SettingsCard.HeaderIcon>
+                                            </controls:SettingsCard>
+                                            <controls:SettingsCard>
+                                                <controls:SettingsCard.Header>
+                                                    <TextBlock x:Name="AutoProtectionScopeLabelText" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                                </controls:SettingsCard.Header>
+                                                <ComboBox x:Name="IdleScopeCombo" HorizontalAlignment="Right" SelectedIndex="0" SelectionChanged="OnAutoProtectionScopeChanged" Width="220" />
+                                                <controls:SettingsCard.Description>
+                                                    <TextBlock x:Name="IdleScopeHintText" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap" />
+                                                </controls:SettingsCard.Description>
+                                                <controls:SettingsCard.HeaderIcon>
+                                                    <FontIcon Glyph="" FontSize="20" />
+                                                </controls:SettingsCard.HeaderIcon>
+                                            </controls:SettingsCard>
+                                        </curtain:ScrollAwareSettingsExpander.Items>
+                                    </curtain:ScrollAwareSettingsExpander>
+                                </StackPanel>
                                 <StackPanel Spacing="6">
                                     <Grid ColumnSpacing="12">
                                         <Grid.ColumnDefinitions>
@@ -156,55 +202,6 @@
                                             </DataTemplate>
                                         </ListView.ItemTemplate>
                                     </ListView>
-                                </StackPanel>
-                                <StackPanel Spacing="4">
-                                    <TextBlock x:Name="CandidateText" Visibility="Collapsed" TextWrapping="Wrap" Opacity="0.7" />
-                                    <TextBlock x:Name="StatusText" TextWrapping="Wrap" Opacity="0.7" />
-                                </StackPanel>
-                                <StackPanel Spacing="4">
-                                    <curtain:ScrollAwareSettingsExpander>
-                                        <curtain:ScrollAwareSettingsExpander.Header>
-                                            <TextBlock x:Name="AutoProtectionTitleText" Style="{StaticResource BodyTextBlockStyle}" TextWrapping="Wrap" />
-                                        </curtain:ScrollAwareSettingsExpander.Header>
-                                        <curtain:ScrollAwareSettingsExpander.Description>
-                                            <TextBlock x:Name="IdleProtectHintText" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap" />
-                                        </curtain:ScrollAwareSettingsExpander.Description>
-                                        <curtain:ScrollAwareSettingsExpander.HeaderIcon>
-                                            <PathIcon Width="20" Height="20" Data="F0 M10,0 A10,10 0 1 1 10,20 A10,10 0 1 1 10,0 Z M10,1.5 A8.5,8.5 0 1 1 10,18.5 A8.5,8.5 0 1 1 10,1.5 Z M9.25,4 L10.75,4 L10.75,9.25 L15,9.25 L15,10.75 L9.25,10.75 Z" />
-                                        </curtain:ScrollAwareSettingsExpander.HeaderIcon>
-                                        <ToggleSwitch x:Name="IdleProtectSwitch" MinWidth="0" Toggled="OnAutoProtectionChanged" VerticalAlignment="Center" HorizontalAlignment="Right" />
-                                        <curtain:ScrollAwareSettingsExpander.Items>
-                                            <controls:SettingsCard>
-                                                <controls:SettingsCard.Header>
-                                                    <TextBlock x:Name="IdleMinutesLabelText" TextWrapping="Wrap" VerticalAlignment="Center" />
-                                                </controls:SettingsCard.Header>
-                                                <ComboBox x:Name="IdleMinutesCombo" HorizontalAlignment="Right" VerticalAlignment="Center" MinWidth="136" SelectedValuePath="Tag" SelectionChanged="OnAutoProtectionScopeChanged">
-                                                    <ComboBoxItem Tag="1" />
-                                                    <ComboBoxItem Tag="3" />
-                                                    <ComboBoxItem Tag="5" />
-                                                    <ComboBoxItem Tag="10" />
-                                                </ComboBox>
-                                                <controls:SettingsCard.Description>
-                                                    <TextBlock x:Name="IdleMinutesHintText" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap" />
-                                                </controls:SettingsCard.Description>
-                                                <controls:SettingsCard.HeaderIcon>
-                                                    <PathIcon Width="20" Height="20" Data="F0 M10,0 A10,10 0 1 1 10,20 A10,10 0 1 1 10,0 Z M10,1.5 A8.5,8.5 0 1 1 10,18.5 A8.5,8.5 0 1 1 10,1.5 Z M9.25,4 L10.75,4 L10.75,9.25 L15,9.25 L15,10.75 L9.25,10.75 Z" />
-                                                </controls:SettingsCard.HeaderIcon>
-                                            </controls:SettingsCard>
-                                            <controls:SettingsCard>
-                                                <controls:SettingsCard.Header>
-                                                    <TextBlock x:Name="AutoProtectionScopeLabelText" TextWrapping="Wrap" VerticalAlignment="Center" />
-                                                </controls:SettingsCard.Header>
-                                                <ComboBox x:Name="IdleScopeCombo" HorizontalAlignment="Right" SelectedIndex="0" SelectionChanged="OnAutoProtectionScopeChanged" Width="220" />
-                                                <controls:SettingsCard.Description>
-                                                    <TextBlock x:Name="IdleScopeHintText" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap" />
-                                                </controls:SettingsCard.Description>
-                                                <controls:SettingsCard.HeaderIcon>
-                                                    <FontIcon Glyph="" FontSize="20" />
-                                                </controls:SettingsCard.HeaderIcon>
-                                            </controls:SettingsCard>
-                                        </curtain:ScrollAwareSettingsExpander.Items>
-                                    </curtain:ScrollAwareSettingsExpander>
                                 </StackPanel>
                             </StackPanel>
                         </ScrollViewer>

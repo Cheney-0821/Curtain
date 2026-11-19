@@ -81,7 +81,7 @@ public sealed partial class MainWindow
         if (_settings.PrivacyMouseButton == Curtain.Core.Protection.PrivacyMouseButton.Off) return;
         _privacyMouseHook = new(DispatcherQueue, _settings.PrivacyMouseButton, () => TogglePrivacyProtection("SideKey"));
         if (!_privacyMouseHook.IsInstalled)
-            Localized.SetText(StatusText, "PrivacyMouseFailed");
+            OnNotice("PrivacyMouseFailed");
     }
 
     private void OnPrivacyMouseChanged(object sender, SelectionChangedEventArgs e)
@@ -100,7 +100,7 @@ public sealed partial class MainWindow
             _loadingSettings = true;
             PrivacyMouseCombo.SelectedIndex = (int)before.PrivacyMouseButton;
             _loadingSettings = false;
-            Localized.SetText(StatusText, "PrivacyMouseFailed");
+            OnNotice("PrivacyMouseFailed");
             return;
         }
         _privacyMouseHook?.Dispose();

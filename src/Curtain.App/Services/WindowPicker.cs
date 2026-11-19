@@ -94,6 +94,12 @@ internal sealed class WindowPicker : IDisposable
     private void OnTick(DispatcherQueueTimer sender, object args)
     {
         if (!IsActive) return;
+        if (_handoffPending)
+        {
+            if (DateTime.UtcNow >= _until || (NativeMethods.GetAsyncKeyState(0x1B) & 0x8000) != 0)
+                CompleteHandoff();
+            return;
+        }
         try
         {
             if (DateTime.UtcNow >= _until)
@@ -175,6 +181,11 @@ internal sealed class WindowPicker : IDisposable
                 hwnd: identity.Handle, targetProcessId: (int)identity.ProcessId, mouseX: point.X, mouseY: point.Y);
             return;
         }
+        if (_manager.HasSession(identity))
+        {
+            Stop(0, "PickerAlreadyAdded");
+            return;
+        }
         CurtainDiagnostics.Write("picker.confirmed", operationId: _operationId,
             stage: "confirm", reasonCode: "Success", hwnd: identity.Handle,
             targetProcessId: (int)identity.ProcessId, mouseX: point.X, mouseY: point.Y);
@@ -197,7 +208,11 @@ internal sealed class WindowPicker : IDisposable
         _lastPreview = LocalizationMessage.Create(key, arguments);
         PreviewChanged?.Invoke(_lastPreview);
     }
-    internal void Cancel() { if (IsActive) Stop(0, "PickerCancelled"); }
+    internal void Cancel()
+    {
+        if (_handoffPending) CompleteHandoff();
+        else if (IsActive) Stop(0, "PickerCancelled");
+    }
 
     private void Stop(nint selected, string key)
     {
@@ -221,8 +236,16 @@ internal sealed class WindowPicker : IDisposable
             if (handoff && session is not null)
             {
                 _handoffPending = true;
-                deferVisualRelease = session.WaitForFirstFrame(OnHandoffFramePresented);
-                if (!deferVisualRelease) _handoffPending = false;
+                int generation = _generation;
+                deferVisualRelease = session.WaitForFirstFrame(() =>
+                {
+                    if (_handoffPending && generation == _generation) CompleteHandoff();
+                });
+                if (deferVisualRelease)
+                {
+                    _until = DateTime.UtcNow.AddSeconds(1);
+                    _timer.Start();
+                }
             }
         }
         finally
@@ -232,15 +255,9 @@ internal sealed class WindowPicker : IDisposable
         }
     }
 
-    private void OnHandoffFramePresented()
-    {
-        if (!_handoffPending) return;
-        _handoffPending = false;
-        CompleteHandoff();
-    }
-
     private void CompleteHandoff()
     {
+        _timer.Stop();
         _handoffPending = false;
         IsActive = false;
         ReleaseSelectionVisuals();

@@ -694,8 +694,7 @@ public sealed partial class MainWindow : Window
     private void OnWindowSettingsLoaded(object sender, RoutedEventArgs args)
     {
         if (sender is not CommunityToolkit.WinUI.Controls.SettingsExpander expander || expander.Tag is not ProtectedApplicationItem app) return;
-        var item = app.Members[0];
-        var follow = new CheckBox { IsChecked = item.UsesGlobal, MinWidth = 0, HorizontalAlignment = HorizontalAlignment.Right };
+        var follow = new CheckBox { MinWidth = 0, HorizontalAlignment = HorizontalAlignment.Right };
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(follow, LocalizationService.Get("FollowGlobalProtection"));
         var followCard = new CommunityToolkit.WinUI.Controls.SettingsCard
         {
@@ -703,28 +702,41 @@ public sealed partial class MainWindow : Window
             Description = LocalizationService.Get("FollowGlobalDescription"),
             HeaderIcon = new FontIcon { Glyph = "\uE71B", FontSize = 20 }, Content = follow
         };
-        var editor = new WindowProtectionControl(item.ProtectionOptions);
+        var editor = new WindowProtectionControl(app.ProtectionOptions);
         var editorCards = editor.TakeSettingsCards();
-        editor.SetEditable(follow.IsChecked != true);
-        bool refreshing = false;
+        bool applying = false;
         void Refresh()
         {
-            refreshing = true;
-            follow.IsChecked = app.UsesGlobal; editor.SetEditable(follow.IsChecked != true); editor.SetSettings(app.ProtectionOptions);
-            refreshing = false;
+            if (applying) return;
+            applying = true;
+            try
+            {
+                bool usesGlobal = app.UsesGlobal;
+                follow.IsChecked = usesGlobal;
+                editor.SetSettings(app.ProtectionOptions);
+                editor.SetEditable(!usesGlobal);
+            }
+            finally { applying = false; }
         }
         void ConfigureFollow()
         {
-            if (refreshing || app.Members.All(member => member.Session.IsDestroyed)) return;
-            WindowProtectionSettings? value = follow.IsChecked == true ? null : editor.Settings;
-            ConfigureApplicationProtection(app, value);
-            Refresh();
+            if (applying) return;
+            applying = true;
+            try
+            {
+                ConfigureApplicationProtection(app, follow.IsChecked == true ? null : app.ProtectionOptions);
+            }
+            finally { applying = false; }
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (expander.IsLoaded && ReferenceEquals(expander.Tag, app)) Refresh();
+            });
         }
         follow.Checked += (_, _) => ConfigureFollow();
         follow.Unchecked += (_, _) => ConfigureFollow();
         editor.Changed += value =>
         {
-            if (!refreshing && follow.IsChecked != true)
+            if (!applying && !app.UsesGlobal)
             {
                 ConfigureApplicationProtection(app, value);
             }
@@ -738,6 +750,7 @@ public sealed partial class MainWindow : Window
         expander.Items.Clear(); expander.Items.Add(followCard);
         foreach (var card in editorCards) expander.Items.Add(card);
         expander.Items.Add(CreateClearRegionCard(app));
+        Refresh();
     }
 
     private CommunityToolkit.WinUI.Controls.SettingsCard CreateClearRegionCard(ProtectedApplicationItem app)

@@ -20,12 +20,16 @@ internal static class NativeMethods
     public const long WS_EX_TOOLWINDOW = 0x00000080L;
     public const long WS_EX_APPWINDOW = 0x00040000L;
     public const long WS_EX_NOACTIVATE = 0x08000000L;
+    private const long WsExTopmost = 0x00000008L;
+    private static readonly nint HwndTopmost = -1;
+    private static readonly nint HwndNotTopmost = -2;
     public const uint SWP_NOSIZE = 0x0001;
     public const uint SWP_NOMOVE = 0x0002;
     public const uint SWP_NOZORDER = 0x0004;
     public const uint SWP_NOACTIVATE = 0x0010;
     public const uint SWP_FRAMECHANGED = 0x0020;
     public const uint SWP_SHOWWINDOW = 0x0040;
+    public const uint SWP_NOOWNERZORDER = 0x0200;
     public const int SW_HIDE = 0;
     public const int SW_RESTORE = 9;
     public const uint WM_SIZE = 0x0005;
@@ -39,12 +43,15 @@ internal static class NativeMethods
     public const int DWMWCP_ROUND = 2;
     public const int DWMWCP_ROUNDSMALL = 3;
     public const int GW_HWNDPREV = 3;
+    private const uint GwHwndNext = 2;
     public const uint WINEVENT_OUTOFCONTEXT = 0;
     public const uint WINEVENT_SKIPOWNPROCESS = 2;
     public const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
     public const uint EVENT_SYSTEM_MINIMIZESTART = 0x0016;
     public const uint EVENT_SYSTEM_MINIMIZEEND = 0x0017;
     public const uint EVENT_OBJECT_DESTROY = 0x8001;
+    public const uint EVENT_OBJECT_SHOW = 0x8002;
+    public const uint EVENT_OBJECT_HIDE = 0x8003;
     public const uint EVENT_OBJECT_LOCATIONCHANGE = 0x800B;
 
     [StructLayout(LayoutKind.Sequential)] public struct Point { public int X; public int Y; }
@@ -99,6 +106,7 @@ internal static class NativeMethods
     public static bool IsSelectableWindow(nint hwnd)
         => WindowSelectionEvaluator.Evaluate(hwnd).IsSelectable;
     [DllImport("user32.dll")] public static extern nint GetWindow(nint hwnd, uint command);
+    [DllImport("user32.dll")] private static extern nint GetTopWindow(nint hwnd);
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(nint hwnd, out uint processId);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowTextW(nint hwnd, StringBuilder text, int maxCount);
     [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int virtualKey);
@@ -221,6 +229,70 @@ internal static class NativeMethods
         return hr == 0;
     }
 
+    internal static (nint Handle, PixelRect Bounds)? FindContainedToolPopup(
+        nint target, PixelRect targetBounds, uint targetProcess, uint targetThread, string popupClass,
+        bool allowUnowned)
+    {
+        const long toolWindowStyles = WS_EX_TOOLWINDOW | WS_EX_APPWINDOW | WsExTopmost;
+        // Walk toward the front to choose the highest matching popup in the same Z-order band.
+        (nint Handle, PixelRect Bounds)? popup = null;
+        nint window = GetWindow(target, GW_HWNDPREV);
+        for (int count = 0; window != 0 && count < 512; count++, window = GetWindow(window, GW_HWNDPREV))
+        {
+            if (GetWindowThreadProcessId(window, out uint process) != targetThread || process != targetProcess ||
+                (GetWindowLongPtr(window, GWL_EXSTYLE).ToInt64() & toolWindowStyles) != WS_EX_TOOLWINDOW ||
+                !string.Equals(ClassOf(window), popupClass, StringComparison.Ordinal))
+                continue;
+
+            nint owner = GetWindow(window, GW_OWNER);
+            if (owner != target && !(allowUnowned && owner == 0)) continue;
+            if (GetVisibleBounds(window) is { } bounds &&
+                bounds.Left >= targetBounds.Left && bounds.Top >= targetBounds.Top &&
+                bounds.Right <= targetBounds.Right && bounds.Bottom <= targetBounds.Bottom)
+                popup = (window, bounds);
+        }
+        return popup;
+    }
+
+    private static bool IsTopmost(nint window) =>
+        window != 0 && (GetWindowLongPtr(window, GWL_EXSTYLE).ToInt64() & WsExTopmost) != 0;
+
+    private static bool ReorderWithoutActivation(nint window, nint after) =>
+        SetWindowPos(window, after, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+
+    internal static bool ReturnToNormalZOrder(nint window) =>
+        !IsTopmost(window) || ReorderWithoutActivation(window, HwndNotTopmost);
+
+    internal static bool KeepAboveNormalWindows(nint overlay, nint pin)
+    {
+        // Leave existing always-on-top windows in front. The regular app can then show its
+        // next popup without a frame appearing before an asynchronous WinEvent reaches us.
+        nint preceding = 0;
+        nint window = GetTopWindow(0);
+        for (int count = 0; count < 512 && IsTopmost(window); count++, window = GetWindow(window, GwHwndNext))
+        {
+            if (window != overlay && window != pin) preceding = window;
+        }
+        if (IsTopmost(overlay) && IsTopmost(pin) &&
+            GetWindow(overlay, GW_HWNDPREV) == pin && GetWindow(pin, GW_HWNDPREV) == preceding)
+            return true;
+        return PlaceInTopmostBand(overlay, preceding) && PlaceInTopmostBand(pin, preceding);
+    }
+
+    private static bool PlaceInTopmostBand(nint window, nint preceding)
+    {
+        if (preceding == 0) return ReorderWithoutActivation(window, HwndTopmost);
+        if (!IsTopmost(window) && !ReorderWithoutActivation(window, HwndTopmost)) return false;
+        return ReorderWithoutActivation(window, preceding);
+    }
+
+    internal static bool PositionGeometry(nint window, PixelRect bounds, bool showWindow)
+    {
+        uint flags = SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER;
+        if (showWindow) flags |= SWP_SHOWWINDOW;
+        return SetWindowPos(window, 0, bounds.Left, bounds.Top, bounds.Width, bounds.Height, flags);
+    }
+
     /// <summary>
     /// Update geometry independently of relative Z-order. The previous combined call
     /// could fail to move the overlay when the preceding HWND was the overlay itself.
@@ -232,25 +304,21 @@ internal static class NativeMethods
             return false;
 
         // Geometry must still follow the target even when a Z-order adjustment fails.
-        uint geometryFlags = SWP_NOZORDER | SWP_NOACTIVATE;
-        if (showWindow) geometryFlags |= SWP_SHOWWINDOW;
-        if (!SetWindowPos(window, nint.Zero, bounds.Left, bounds.Top, bounds.Width, bounds.Height,
-                geometryFlags))
+        if (!PositionGeometry(window, bounds, showWindow))
         {
             System.Diagnostics.Debug.WriteLine(
                 $"Curtain geometry SetWindowPos failed: {Marshal.GetLastPInvokeError()}");
             return false;
         }
 
+        bool anchorIsTopmost = IsTopmost(anchor);
+        if (!anchorIsTopmost && !ReturnToNormalZOrder(window)) return false;
         nint prev = GetWindow(anchor, GW_HWNDPREV);
-        // An already-adjacent overlay can be the anchor's immediately preceding window.
-        // Never insert a HWND directly after itself.
-        for (int i = 0; prev == window && i < 4; i++)
-            prev = GetWindow(prev, GW_HWNDPREV);
-        if (prev == window) return false;
+        if (prev == window) return true;
 
-        bool reordered = SetWindowPos(window, prev, 0, 0, 0, 0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        if (anchorIsTopmost && prev == 0) prev = HwndTopmost;
+        if (!anchorIsTopmost && IsTopmost(prev)) prev = 0; // HWND_TOP within the normal band.
+        bool reordered = ReorderWithoutActivation(window, prev);
         if (!reordered)
             System.Diagnostics.Debug.WriteLine(
                 $"Curtain Z-order SetWindowPos failed: {Marshal.GetLastPInvokeError()}");

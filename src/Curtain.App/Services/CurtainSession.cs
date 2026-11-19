@@ -16,6 +16,9 @@ internal sealed class CurtainSession : IDisposable
     private WindowHooks? _hooks;
     private DragGesture? _drag;
     private (DockedPin Placement, PixelRect Target, int Dpi)? _lastPlacement;
+    private readonly string? _popupClass;
+    private readonly bool _allowUnownedPopup;
+    private nint _coveredPopup;
     private bool _disposed;
     private bool? _lastClosed;
     private bool? _lastAppliedProtectionState;
@@ -74,6 +77,20 @@ internal sealed class CurtainSession : IDisposable
                 throw new InvalidOperationException("目标进程已经更换。");
             _ = _process.Handle;
             _applicationName = ReadApplicationName(_process);
+            string processName = _process.ProcessName;
+            if ((processName.Equals("Weixin", StringComparison.OrdinalIgnoreCase) ||
+                    processName.Equals("WeChat", StringComparison.OrdinalIgnoreCase)) &&
+                target.Identity.ClassName.StartsWith("Qt", StringComparison.Ordinal) &&
+                target.Identity.ClassName.EndsWith("QWindowIcon", StringComparison.Ordinal))
+            {
+                _popupClass = target.Identity.ClassName[..^"Icon".Length] + "ToolSaveBits";
+                _allowUnownedPopup = true;
+            }
+            else if (processName.Equals("WXWork", StringComparison.OrdinalIgnoreCase) &&
+                target.Identity.ClassName == "WeWorkWindow")
+            {
+                _popupClass = "WeWorkEmotionWindow";
+            }
             stage = "curtain-window-create";
             _curtain = new CurtainWindow(dispatcher, Target.Identity.Handle, Target.Identity.ProcessId,
                 _operationId, SessionId, _ruleId);
@@ -97,7 +114,7 @@ internal sealed class CurtainSession : IDisposable
                 hwnd: _pin.Handle.ToInt64(), ownerHwnd: Handle.ToInt64(), relatedHwnd: _curtain.Handle.ToInt64(),
                 targetProcessId: (int)Target.Identity.ProcessId, sessionId: SessionId, ruleId: _ruleId);
             stage = "target-hooks";
-            _hooks = new WindowHooks(dispatcher, Handle, RefreshSafely);
+            _hooks = new WindowHooks(dispatcher, Handle, target.Identity.ThreadId, _popupClass, RefreshSafely);
             if (!IsCurrent()) throw new InvalidOperationException("目标已经关闭。");
             stage = "initial-refresh";
             Refresh(animateVisibilityChange: true);
@@ -176,6 +193,8 @@ internal sealed class CurtainSession : IDisposable
         if (IsDestroyed || _idleForcedClosed || _curtain is not { } curtain ||
             !IsCurrent() || NativeMethods.GetVisibleBounds(Handle) is not { } bounds) return false;
         CancelGesture();
+        NativeMethods.ReturnToNormalZOrder(curtain.Handle);
+        if (_pin is { } pin) NativeMethods.ReturnToNormalZOrder(pin.Handle);
         int dpi = Math.Max(96, (int)NativeMethods.GetDpiForWindow(Handle));
         bool started = curtain.BeginClearRegionEdit(bounds, dpi, saved =>
         {
@@ -265,6 +284,7 @@ internal sealed class CurtainSession : IDisposable
         Item.Update(_applicationName, Target.IsClosed, Target.IsSuspended);
         if (bounds is null)
         {
+            _coveredPopup = 0;
             CancelGesture();
             CancelClearRegionEdit();
             NativeMethods.ShowWindow(_pin.Handle, NativeMethods.SW_HIDE);
@@ -306,16 +326,41 @@ internal sealed class CurtainSession : IDisposable
             NativeMethods.ShowWindow(_pin.Handle, NativeMethods.SW_HIDE);
             return;
         }
-        if (!NativeMethods.PositionAbove(_curtain.Handle, Handle, bounds.Value, showWindow: false))
+        var protection = _idleForcedClosed ? new WindowProtectionSettings() : EffectiveProtection;
+        var popup = Target.IsClosed && _popupClass is { } popupClass
+            ? NativeMethods.FindContainedToolPopup(Handle, bounds.Value, Target.Identity.ProcessId,
+                Target.Identity.ThreadId, popupClass, _allowUnownedPopup)
+            : null;
+        _coveredPopup = popup?.Handle ?? 0;
+        bool aboveNormalWindows = false;
+        if (Target.IsClosed && _popupClass is not null && protection.AllowClickThrough)
+        {
+            nint foreground = NativeMethods.GetForegroundWindow();
+            if (foreground == Handle || foreground == popup?.Handle)
+                aboveNormalWindows = NativeMethods.KeepAboveNormalWindows(_curtain.Handle, _pin.Handle);
+        }
+        bool positioned = aboveNormalWindows
+            ? NativeMethods.PositionGeometry(_curtain.Handle, bounds.Value, showWindow: false)
+            : NativeMethods.PositionAbove(_curtain.Handle, popup?.Handle ?? Handle, bounds.Value, showWindow: false);
+        if (!positioned)
             CurtainDiagnostics.Write("overlay.position.failed", CurtainDiagnosticLevel.Warning,
                 operationId: _operationId, stage: "position-above-target", reasonCode: "PositionAboveFailed",
                 hwnd: _curtain.Handle.ToInt64(), targetProcessId: (int)Target.Identity.ProcessId,
                 errorCode: Marshal.GetLastPInvokeError(), sessionId: SessionId, ruleId: _ruleId);
         _curtain.SetTargetMaximized(NativeMethods.IsZoomed(Handle));
-        _curtain.AllowClearRegions(!_idleForcedClosed);
-        _curtain.ConfigureWorkingProtection(_idleForcedClosed ? new WindowProtectionSettings() : EffectiveProtection);
-        nint pinAnchor = Target.IsClosed || _curtain.IsVisible ? _curtain.Handle : Handle;
-        NativeMethods.PositionAbove(_pin.Handle, pinAnchor, placement.Bounds);
+        var coveredArea = popup?.Bounds;
+        _curtain.AllowClearRegions(!_idleForcedClosed, coveredArea is { } area
+            ? new PixelRect(area.Left - bounds.Value.Left, area.Top - bounds.Value.Top,
+                area.Right - bounds.Value.Left, area.Bottom - bounds.Value.Top)
+            : null);
+        _curtain.ConfigureWorkingProtection(protection);
+        if (aboveNormalWindows)
+            NativeMethods.PositionGeometry(_pin.Handle, placement.Bounds, showWindow: true);
+        else
+        {
+            nint pinAnchor = Target.IsClosed || _curtain.IsVisible ? _curtain.Handle : Handle;
+            NativeMethods.PositionAbove(_pin.Handle, pinAnchor, placement.Bounds);
+        }
         if (forceVisibilityUpdate || _lastAppliedProtectionState != Target.IsClosed)
         {
             _curtain.SetProtectedVisible(Target.IsClosed, animateVisibilityChange);
@@ -324,7 +369,8 @@ internal sealed class CurtainSession : IDisposable
     }
     private void OnPressed(PixelPoint point)
     {
-        if (_disposed || !Target.IsClosed || !IsCurrent()) return;
+        if (_disposed || !Target.IsClosed || !IsCurrent() ||
+            (_coveredPopup != 0 && NativeMethods.GetForegroundWindow() == _coveredPopup)) return;
         bool accepted = NativeMethods.SetForegroundWindow(Handle);
         RefreshSafely();
         bool activated = NativeMethods.GetForegroundWindow() == Handle;

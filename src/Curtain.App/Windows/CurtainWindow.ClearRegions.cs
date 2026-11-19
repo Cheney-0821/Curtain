@@ -27,14 +27,16 @@ internal sealed partial class CurtainWindow
     private bool _regionMenuOpen;
     private bool _clearRegionsAllowed;
     private bool _hasWindowRegion;
-    private (Vector2 Size, float Scale)? _regionLayout;
+    private PixelRect? _coveredPopup;
+    private (Vector2 Size, float Scale, PixelRect? CoveredPopup)? _regionLayout;
 
     internal bool IsEditingClearRegions => _regionDraft is not null;
     private float RegionScale => Math.Max(96, NativeMethods.GetDpiForWindow(Handle)) / 96f;
 
-    internal void AllowClearRegions(bool allowed)
+    internal void AllowClearRegions(bool allowed, PixelRect? coveredPopup = null)
     {
         _clearRegionsAllowed = allowed;
+        _coveredPopup = coveredPopup;
         if (!allowed) _protectionMenu?.Dismiss();
         UpdateClearRegionSurface();
     }
@@ -54,7 +56,7 @@ internal sealed partial class CurtainWindow
             return;
         }
 
-        var layout = (Size: _visual.Size, Scale: RegionScale);
+        var layout = (Size: _visual.Size, Scale: RegionScale, CoveredPopup: _coveredPopup);
         if (_regionLayout == layout) return;
         int width = (int)layout.Size.X, height = (int)layout.Size.Y;
         nint region = CreateRectRgn(0, 0, width, height);
@@ -76,6 +78,21 @@ internal sealed partial class CurtainWindow
                         throw new System.ComponentModel.Win32Exception();
                 }
                 finally { HandleNative.DeleteObject(cutout); }
+            }
+
+            // A region opened for the main window must not reveal the popup over it.
+            if (layout.CoveredPopup is { } popup)
+            {
+                const int union = 2; // RGN_OR
+                nint popupRegion = CreateRectRgn(popup.Left, popup.Top,
+                    Math.Min(popup.Right, width), Math.Min(popup.Bottom, height));
+                if (popupRegion == 0) throw new System.ComponentModel.Win32Exception();
+                try
+                {
+                    if (CombineRgn(region, region, popupRegion, union) == 0)
+                        throw new System.ComponentModel.Win32Exception();
+                }
+                finally { HandleNative.DeleteObject(popupRegion); }
             }
 
             if (SetWindowRgn(Handle, region, IsVisible) == 0)

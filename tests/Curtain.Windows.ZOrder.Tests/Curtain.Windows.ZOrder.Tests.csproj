@@ -9,5 +9,7 @@
     <ProjectReference Include="../../src/Curtain.Core/Curtain.Core.csproj" />
     <Compile Include="../../src/Curtain.App/Interop/NativeMethods.cs" Link="NativeMethods.cs" />
     <Compile Include="../../src/Curtain.App/Interop/PrivacyNative.cs" Link="PrivacyNative.cs" />
+    <Compile Include="../../src/Curtain.App/Interop/WindowSelectionEvaluator.cs" Link="WindowSelectionEvaluator.cs" />
+    <Compile Include="../../src/Curtain.App/Interop/WindowSelectionResult.cs" Link="WindowSelectionResult.cs" />
   </ItemGroup>
 </Project>

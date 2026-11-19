@@ -12,16 +12,20 @@ internal sealed class WindowHooks : IDisposable
     private readonly DispatcherQueue _dispatcher;
     private readonly Action _refresh;
     private readonly nint _target;
+    private readonly uint _targetThread;
+    private readonly string? _popupClass;
     private readonly NativeMethods.WinEventProc _callback;
     private readonly List<nint> _hooks = new();
     private volatile bool _disposed;
     public bool IsDestroyed { get; private set; }
 
-    public WindowHooks(DispatcherQueue dispatcher, nint target, Action refresh)
+    public WindowHooks(DispatcherQueue dispatcher, nint target, uint targetThread, string? popupClass, Action refresh)
     {
         _dispatcher = dispatcher;
         _refresh = refresh;
         _target = target;
+        _targetThread = targetThread;
+        _popupClass = popupClass;
         _callback = OnEvent;
         Add(NativeMethods.EVENT_OBJECT_DESTROY, NativeMethods.EVENT_OBJECT_LOCATIONCHANGE);
         Add(NativeMethods.EVENT_SYSTEM_FOREGROUND, NativeMethods.EVENT_SYSTEM_FOREGROUND);
@@ -42,8 +46,15 @@ internal sealed class WindowHooks : IDisposable
 
     private void OnEvent(nint hook, uint evt, nint hwnd, int objectId, int childId, uint thread, uint time)
     {
-        if (_disposed || objectId != 0) return; // OBJID_WINDOW; ignore child UI accessibility events
-        if (evt != NativeMethods.EVENT_SYSTEM_FOREGROUND && hwnd != _target) return;
+        if (_disposed || objectId != 0 || childId != 0) return; // Ignore child UI accessibility events.
+        if (evt != NativeMethods.EVENT_SYSTEM_FOREGROUND && hwnd != _target)
+        {
+            if (_popupClass is null || thread != _targetThread ||
+                evt is not (NativeMethods.EVENT_OBJECT_SHOW or NativeMethods.EVENT_OBJECT_HIDE or
+                    NativeMethods.EVENT_OBJECT_LOCATIONCHANGE) ||
+                !string.Equals(NativeMethods.ClassOf(hwnd), _popupClass, StringComparison.Ordinal))
+                return;
+        }
         if (evt == NativeMethods.EVENT_OBJECT_DESTROY && hwnd == _target) IsDestroyed = true;
         _dispatcher.TryEnqueue(() => { if (!_disposed) _refresh(); });
     }

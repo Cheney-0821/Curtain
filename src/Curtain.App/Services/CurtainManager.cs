@@ -25,7 +25,7 @@ internal sealed class CurtainManager : IDisposable
     public ObservableCollection<ProtectedWindowItem> Windows { get; } = new();
     public event Action<string>? Notice;
     public event Action? CollectionChanged;
-    internal event Action<CurtainSession, PixelPoint>? ProtectionMenuRequested;
+    internal event Action<CurtainSession, PixelPoint, nint>? ProtectionMenuRequested;
     internal CurtainManager(DispatcherQueue dispatcher)
     {
         _dispatcher = dispatcher;
@@ -150,7 +150,8 @@ internal sealed class CurtainManager : IDisposable
     }
 
     private void OnNotice(string message) => Notice?.Invoke(message);
-    private void OnProtectionMenuRequested(CurtainSession session, PixelPoint point) => ProtectionMenuRequested?.Invoke(session, point);
+    private void OnProtectionMenuRequested(CurtainSession session, PixelPoint point, nint pinHandle) =>
+        ProtectionMenuRequested?.Invoke(session, point, pinHandle);
 
     private void OnEnded(CurtainSession session, string message)
     {

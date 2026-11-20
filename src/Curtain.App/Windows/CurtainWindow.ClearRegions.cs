@@ -11,15 +11,15 @@ namespace Curtain.App.Windows;
 
 internal sealed partial class CurtainWindow
 {
-    private const int MaxClearRegions = 16;
     private const int RegionDifference = 4;
-    private List<Vector4> _clearRegions = [];
-    private List<Vector4>? _regionDraft;
-    private Vector2? _drawStart;
+    private List<ClearArea> _clearRegions = [];
+    private List<ClearArea>? _regionDraft;
+    private PixelPoint? _drawStart;
     private ShapeVisual? _regionOutlines;
     private CompositionColorBrush? _regionInk;
     private CompositionColorBrush? _regionTint;
-    private readonly List<(CompositionRectangleGeometry Geometry, CompositionSpriteShape Shape)> _regionShapes = [];
+    private readonly List<(CompositionGeometry Geometry, CompositionSpriteShape Shape)> _regionShapes = [];
+    private CompositionRectangleGeometry? _regionPreview;
     private Action<bool>? _regionEditFinished;
     private RegionEditorFeedback? _regionFeedback;
     private nint _regionCrosshair;
@@ -28,7 +28,7 @@ internal sealed partial class CurtainWindow
     private bool _clearRegionsAllowed;
     private bool _hasWindowRegion;
     private PixelRect? _coveredPopup;
-    private (Vector2 Size, float Scale, PixelRect? CoveredPopup)? _regionLayout;
+    private (Vector2 Size, float Scale, PixelRect? CoveredPopup, bool UseAreas)? _regionLayout;
 
     internal bool IsEditingClearRegions => _regionDraft is not null;
     private float RegionScale => Math.Max(96, NativeMethods.GetDpiForWindow(Handle)) / 96f;
@@ -39,11 +39,25 @@ internal sealed partial class CurtainWindow
         _coveredPopup = coveredPopup;
         if (!allowed) _protectionMenu?.Dismiss();
         UpdateClearRegionSurface();
+        RefreshClearAreaControl();
     }
 
     private void UpdateClearRegionSurface()
     {
-        if (IsEditingClearRegions || !_clearRegionsAllowed || _clearRegions.Count == 0)
+        UpdateOutlineLayout();
+        var layout = (Size: _visual.Size, Scale: RegionScale, CoveredPopup: _coveredPopup,
+            UseAreas: _clearRegionsAllowed && !IsEditingClearRegions);
+        if (_regionLayout == layout) return;
+        int width = (int)layout.Size.X, height = (int)layout.Size.Y;
+        var transitioning = layout.UseAreas ? _areaTransition?.Area : null;
+        var holes = layout.UseAreas
+            ? _clearRegions.Where(area => area.IsClear && area != transitioning)
+                .SelectMany(area => area.VisibleTiles(width, height, layout.Scale, layout.CoveredPopup)).ToArray()
+            : [];
+        var animated = transitioning?.VisibleTiles(width, height, layout.Scale, layout.CoveredPopup).ToArray() ?? [];
+
+        UpdateAreaBlurClips(new(0, 0, width, height), holes, animated);
+        if (holes.Length == 0)
         {
             if (_hasWindowRegion)
             {
@@ -51,26 +65,17 @@ internal sealed partial class CurtainWindow
                     throw new System.ComponentModel.Win32Exception();
                 _hasWindowRegion = false;
             }
-            _regionLayout = null;
-            if (IsEditingClearRegions) DrawRegionOutlines();
+            _regionLayout = layout;
             return;
         }
 
-        var layout = (Size: _visual.Size, Scale: RegionScale, CoveredPopup: _coveredPopup);
-        if (_regionLayout == layout) return;
-        int width = (int)layout.Size.X, height = (int)layout.Size.Y;
         nint region = CreateRectRgn(0, 0, width, height);
         try
         {
             if (region == 0) throw new System.ComponentModel.Win32Exception();
-            foreach (Vector4 hole in _clearRegions)
+            foreach (var tile in holes)
             {
-                int left = Math.Clamp((int)MathF.Round(hole.X * layout.Scale), 0, width);
-                int top = Math.Clamp((int)MathF.Round(hole.Y * layout.Scale), 0, height);
-                int right = Math.Clamp((int)MathF.Round(hole.Z * layout.Scale), 0, width);
-                int bottom = Math.Clamp((int)MathF.Round(hole.W * layout.Scale), 0, height);
-                if (right <= left || bottom <= top) continue;
-                nint cutout = CreateRectRgn(left, top, right, bottom);
+                nint cutout = CreateRectRgn(tile.Left, tile.Top, tile.Right, tile.Bottom);
                 if (cutout == 0) throw new System.ComponentModel.Win32Exception();
                 try
                 {
@@ -78,21 +83,6 @@ internal sealed partial class CurtainWindow
                         throw new System.ComponentModel.Win32Exception();
                 }
                 finally { HandleNative.DeleteObject(cutout); }
-            }
-
-            // A region opened for the main window must not reveal the popup over it.
-            if (layout.CoveredPopup is { } popup)
-            {
-                const int union = 2; // RGN_OR
-                nint popupRegion = CreateRectRgn(popup.Left, popup.Top,
-                    Math.Min(popup.Right, width), Math.Min(popup.Bottom, height));
-                if (popupRegion == 0) throw new System.ComponentModel.Win32Exception();
-                try
-                {
-                    if (CombineRgn(region, region, popupRegion, union) == 0)
-                        throw new System.ComponentModel.Win32Exception();
-                }
-                finally { HandleNative.DeleteObject(popupRegion); }
             }
 
             if (SetWindowRgn(Handle, region, IsVisible) == 0)
@@ -113,11 +103,9 @@ internal sealed partial class CurtainWindow
         try
         {
             _input.SetPointerPassthrough(false);
-            _regionOutlines = _compositor.CreateShapeVisual();
-            _regionInk = _compositor.CreateColorBrush(Color.FromArgb(255, 0, 120, 212));
-            _regionTint = _compositor.CreateColorBrush(Color.FromArgb(24, 0, 80, 145));
-            _visual.Children.InsertAtTop(_regionOutlines);
-            _visual.Brush = null;
+            RebuildRegionOutlines();
+            MainBlurSurface.Brush = null;
+            _regionLayout = null;
             UpdateClearRegionSurface();
             NativeMethods.ShowWindow(Handle, 4);
             if (NativeMethods.SetForegroundWindow(Handle) && NativeMethods.GetForegroundWindow() == Handle)
@@ -165,24 +153,9 @@ internal sealed partial class CurtainWindow
             SetCursor(HandleNative.LoadCursorW(0, (nint)32512));
         _regionCrosshair = 0;
         ReleaseSurfaceCapture();
-        _visual.Brush = _effect;
+        MainBlurSurface.Brush = _effect;
         ApplyBlur();
-        if (_regionOutlines is not null)
-        {
-            _visual.Children.Remove(_regionOutlines);
-            _regionOutlines.Shapes.Clear();
-            foreach (var (geometry, shape) in _regionShapes)
-            {
-                shape.Dispose();
-                geometry.Dispose();
-            }
-            _regionShapes.Clear();
-            _regionOutlines.Dispose();
-            _regionOutlines = null;
-        }
-        _regionInk?.Dispose();
-        _regionTint?.Dispose();
-        _regionInk = _regionTint = null;
+        RebuildRegionOutlines();
         if (!notify)
         {
             NativeMethods.ShowWindow(Handle, 0);
@@ -199,14 +172,15 @@ internal sealed partial class CurtainWindow
             NativeMethods.SetForegroundWindow((nint)_protectedWindowHandle);
     }
 
-    private Vector2 EditorPoint()
+    private PixelPoint EditorPoint()
     {
         NativeMethods.GetCursorPos(out var point);
         ScreenToClient(Handle, ref point);
-        return Vector2.Clamp(new(point.X, point.Y), Vector2.Zero, _visual.Size) / RegionScale;
+        var local = Vector2.Clamp(new(point.X, point.Y), Vector2.Zero, _visual.Size) / RegionScale;
+        return new((int)MathF.Round(local.X), (int)MathF.Round(local.Y));
     }
 
-    private static Vector4 Between(Vector2 start, Vector2 end) =>
+    private static PixelRect Between(PixelPoint start, PixelPoint end) =>
         new(Math.Min(start.X, end.X), Math.Min(start.Y, end.Y), Math.Max(start.X, end.X), Math.Max(start.Y, end.Y));
 
     internal void UpdateRegionEditorTarget(PixelRect bounds, int dpi)
@@ -231,35 +205,94 @@ internal sealed partial class CurtainWindow
         _trackingEditorMouse = HandleNative.TrackMouseEvent(ref track);
     }
 
-    private void DrawRegionOutlines(Vector4? dragging = null)
+    private void UpdateOutlineLayout()
     {
-        if (_regionOutlines is null || _regionDraft is null) return;
-        _regionOutlines.Size = _visual.Size;
+        if (_regionOutlines is null) return;
         float scale = RegionScale;
-        bool hasDrag = dragging is { } pending && pending.Z > pending.X && pending.W > pending.Y;
-        int count = _regionDraft.Count + (hasDrag ? 1 : 0);
-        for (int index = 0; index < count; index++)
+        _regionOutlines.Size = _visual.Size / scale;
+        _regionOutlines.Scale = new(scale, scale, 1);
+        _regionOutlines.IsVisible = IsEditingClearRegions || (_desiredVisible && _clearRegionsAllowed);
+    }
+
+    private void RebuildRegionOutlines()
+    {
+        ClearRegionOutlines();
+        bool editing = IsEditingClearRegions;
+        var areas = _regionDraft ?? _clearRegions;
+        if (!editing && areas.All(area => area.IsClear)) return;
+        _regionOutlines = _compositor.CreateShapeVisual();
+        _regionInk = _compositor.CreateColorBrush(Color.FromArgb(255, 0, 120, 212));
+        if (editing) _regionTint = _compositor.CreateColorBrush(Color.FromArgb(24, 0, 80, 145));
+        _visual.Children.InsertAtTop(_regionOutlines);
+
+        foreach (var area in areas)
         {
-            if (index == _regionShapes.Count)
+            if (editing)
             {
-                var newGeometry = _compositor.CreateRectangleGeometry();
-                var newShape = _compositor.CreateSpriteShape(newGeometry);
-                newShape.StrokeBrush = _regionInk;
-                newShape.FillBrush = _regionTint;
-                _regionOutlines.Shapes.Add(newShape);
-                _regionShapes.Add((newGeometry, newShape));
+                foreach (var tile in area.Tiles)
+                {
+                    var fill = _compositor.CreateRectangleGeometry();
+                    fill.Offset = new(tile.Left, tile.Top);
+                    fill.Size = new(tile.Width, tile.Height);
+                    AddShape(fill).FillBrush = _regionTint;
+                }
             }
-            Vector4 rect = index < _regionDraft.Count ? _regionDraft[index] : dragging.GetValueOrDefault();
-            var (geometry, outline) = _regionShapes[index];
-            geometry.Offset = new Vector2(rect.X, rect.Y) * scale;
-            geometry.Size = new Vector2(rect.Z - rect.X, rect.W - rect.Y) * scale;
-            outline.StrokeThickness = 2 * scale;
+            if (!editing && area.IsClear) continue;
+            foreach (var edge in area.Edges)
+            {
+                var line = _compositor.CreateLineGeometry();
+                line.Start = new(edge.Start.X, edge.Start.Y);
+                line.End = new(edge.End.X, edge.End.Y);
+                AddStroke(line);
+            }
         }
-        for (int index = count; index < _regionShapes.Count; index++)
+        if (editing)
         {
-            _regionShapes[index].Geometry.Size = Vector2.Zero;
-            _regionShapes[index].Shape.StrokeThickness = 0;
+            _regionPreview = _compositor.CreateRectangleGeometry();
+            AddStroke(_regionPreview).FillBrush = _regionTint;
         }
+        UpdateOutlineLayout();
+
+        CompositionSpriteShape AddShape(CompositionGeometry geometry)
+        {
+            var shape = _compositor.CreateSpriteShape(geometry);
+            _regionOutlines.Shapes.Add(shape);
+            _regionShapes.Add((geometry, shape));
+            return shape;
+        }
+        CompositionSpriteShape AddStroke(CompositionGeometry geometry)
+        {
+            var shape = AddShape(geometry);
+            shape.StrokeBrush = _regionInk;
+            shape.StrokeThickness = 2;
+            return shape;
+        }
+    }
+
+    private void ClearRegionOutlines()
+    {
+        if (_regionOutlines is not { } outlines) return;
+        _visual.Children.Remove(outlines);
+        outlines.Shapes.Clear();
+        foreach (var (geometry, shape) in _regionShapes)
+        {
+            shape.Dispose();
+            geometry.Dispose();
+        }
+        _regionShapes.Clear();
+        outlines.Dispose();
+        _regionInk?.Dispose();
+        _regionTint?.Dispose();
+        _regionOutlines = null;
+        _regionPreview = null;
+        _regionInk = _regionTint = null;
+    }
+
+    private void DrawRegionPreview(PixelRect rect = default)
+    {
+        if (_regionPreview is not { } preview) return;
+        preview.Offset = new(rect.Left, rect.Top);
+        preview.Size = new(rect.Width, rect.Height);
     }
 
     private nint? HandleEditorCursor(uint message)
@@ -275,13 +308,13 @@ internal sealed partial class CurtainWindow
         if (_regionDraft is not { } regions) return;
         switch (message)
         {
-            case 0x0201 when regions.Count < MaxClearRegions: // Left down
+            case 0x0201: // Left down
                 _drawStart = EditorPoint();
                 _regionFeedback?.HideHint();
                 SetCapture(Handle);
                 break;
             case 0x0200 when _drawStart is { } start:
-                DrawRegionOutlines(Between(start, EditorPoint()));
+                DrawRegionPreview(Between(start, EditorPoint()));
                 break;
             case 0x0200 when !_regionMenuOpen:
                 TrackEditorMouse();
@@ -294,16 +327,15 @@ internal sealed partial class CurtainWindow
                 var rect = Between(start, EditorPoint());
                 _drawStart = null;
                 ReleaseSurfaceCapture();
-                if (rect.Z - rect.X >= 4 && rect.W - rect.Y >= 4)
+                if (rect.Width >= 4 && rect.Height >= 4)
                 {
-                    regions.Add(rect);
-                    EndClearRegionEdit(save: true);
+                    EndClearRegionEdit(save: ClearArea.Add(regions, rect));
                 }
-                else DrawRegionOutlines();
+                else DrawRegionPreview();
                 break;
             case 0x001F or 0x0215 when _drawStart is not null: // Capture lost
                 _drawStart = null;
-                DrawRegionOutlines();
+                DrawRegionPreview();
                 break;
             case 0x0205 when _drawStart is null: // Right up
                 ShowClearRegionMenu(regions);
@@ -321,11 +353,11 @@ internal sealed partial class CurtainWindow
         }
     }
 
-    private void ShowClearRegionMenu(List<Vector4> regions)
+    private void ShowClearRegionMenu(List<ClearArea> regions)
     {
         if (_regionMenuOpen || !NativeMethods.GetCursorPos(out var point)) return;
-        Vector2 local = EditorPoint();
-        int hit = regions.FindLastIndex(r => local.X >= r.X && local.X < r.Z && local.Y >= r.Y && local.Y < r.W);
+        PixelPoint local = EditorPoint();
+        int hit = regions.FindLastIndex(area => area.Contains(local));
         nint menu = CreatePopupMenu();
         if (menu == 0) return;
         int command;

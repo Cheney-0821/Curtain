@@ -794,12 +794,12 @@ public sealed partial class MainWindow : Window
         return card;
     }
 
-    private void OnProtectionMenuRequested(CurtainSession session, PixelPoint point)
+    private void OnProtectionMenuRequested(CurtainSession session, PixelPoint point, nint pinHandle)
     {
         if (_disposed || _picker.IsActive || _screenPrivacy.IsActive || _idleScope.HasValue) return;
         var app = _applications.FirstOrDefault(item => item.Members.Contains(session.Item));
         if (app is null) return;
-        session.ShowProtectionMenu(point, () => StartRegionEditor(session),
+        session.ShowProtectionMenu(point, pinHandle, () => StartRegionEditor(session),
             value =>
             {
                 if (!session.IsDestroyed) ConfigureApplicationProtection(app, value);

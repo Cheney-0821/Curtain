@@ -23,6 +23,7 @@ Check(pin.Left >= bounds.Left && pin.Right <= bounds.Right && pin.Top >= bounds.
 Check(PinPlacement.Calculate(new PixelRect(0, 0, 18, 12)).Width == 18,
     "small target clamps pin width");
 Check(!new PixelRect(9, 9, 4, 4).IsValid, "invalid rectangle rejected");
+ClearAreaTests.Run(Check);
 Check(PrivacyProfile.Locked.BlockPointer && !PrivacyProfile.Working.BlockPointer,
     "pointer policy independent of visual opacity");
 try

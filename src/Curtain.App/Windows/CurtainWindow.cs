@@ -188,6 +188,7 @@ internal sealed partial class CurtainWindow
                 targetProcessId: (int)_protectedProcessId, sessionId: _sessionId, ruleId: _ruleId);
         if (_pendingShow) LogBackdropRefreshCancelled(_pendingBackdropGeneration, "SupersededByVisibilityRequest");
         _desiredVisible = visible;
+        RefreshClearAreaControl();
         int generation = ++_showGeneration;
         _pendingShow = false; _warmupTicks = 0;
         if (!visible && _ramp == 0) { CancelAndHide(); return; }
@@ -236,7 +237,8 @@ internal sealed partial class CurtainWindow
         var effect = _factory.CreateBrush();
         effect.SetSourceParameter("Source", source);
         var oldEffect = _effect; var oldSource = _backdrop;
-        _effect = effect; _backdrop = source; _visual.Brush = effect;
+        _effect = effect; _backdrop = source; MainBlurSurface.Brush = effect;
+        _areaBlurBrush?.SetSourceParameter("Source", source);
         oldEffect.Dispose(); oldSource.Dispose();
     }
     private async Task ShowFreshBackdropAsync(int generation, bool animate)
@@ -330,6 +332,7 @@ internal sealed partial class CurtainWindow
                 targetProcessId: (int)_protectedProcessId, sessionId: _sessionId, ruleId: _ruleId);
         ++_showGeneration; _pendingShow = false; _warmupTicks = 0;
         _timer.Stop(); _running = _desiredVisible = false; _ramp = 0;
+        RefreshClearAreaControl();
         NativeMethods.ShowWindow(Handle, 0); _visual.Opacity = 1; ReleaseSurfaceCapture();
         bool stillVisible = NativeMethods.IsWindowVisible(Handle);
         if (wasActive || stillVisible)
@@ -381,15 +384,18 @@ internal sealed partial class CurtainWindow
     private bool CanOpenProtectionMenu => !_disposed && _clearRegionsAllowed && _desiredVisible &&
         IsVisible && !IsEditingClearRegions && !_settings.AllowClickThrough;
 
-    internal void ShowProtectionMenu(PixelPoint point, Action draw,
+    internal void ShowProtectionMenu(nint pinHandle, PixelPoint point, Action draw,
         Action<WindowProtectionSettings> configure, Action remove)
     {
-        if (!CanOpenProtectionMenu) return;
+        if (pinHandle == 0 ? !CanOpenProtectionMenu :
+            _disposed || !_clearRegionsAllowed || IsEditingClearRegions || !NativeMethods.IsWindowVisible(pinHandle))
+            return;
         _protectionMenu?.Dismiss();
+        HideAreaPin();
         try
         {
             _protectionMenu = new(_settings, draw, configure, remove, () => _protectionMenu = null);
-            _protectionMenu.Show(Handle, point, () => CurtainDiagnostics.Write("overlay.protection-menu.opened",
+            _protectionMenu.Show(pinHandle != 0 ? pinHandle : Handle, point, () => CurtainDiagnostics.Write("overlay.protection-menu.opened",
                 operationId: _operationId, stage: "window-protection", reasonCode: "Ready",
                 hwnd: Handle.ToInt64(), ownerHwnd: _protectedWindowHandle, sessionId: _sessionId, ruleId: _ruleId));
         }
@@ -437,6 +443,11 @@ internal sealed partial class CurtainWindow
         if (_disposed) return;
         if (IsEditingClearRegions) EndClearRegionEdit(save: false, notify: false);
         CancelAndHide(); _disposed = true;
+        if (_areaTimer is { } areaTimer) areaTimer.Tick -= OnAreaControlTick;
+        _areaPin?.Close();
+        _areaPin = null;
+        ClearRegionOutlines();
+        CloseAreaBlurVisuals();
         _timer.Stop(); _messages.Dispose(); _input.Dispose(); NotifyFirstFrame();
         _target.Root = null; _visual.Brush = null; _visual.Clip = null;
         _effect.Dispose(); _factory.Dispose(); _backdrop.Dispose(); _cornerClip?.Dispose(); _cornerGeometry?.Dispose(); _visual.Dispose(); _target.Dispose(); _compositor.Dispose();

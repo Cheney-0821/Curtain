@@ -4,6 +4,9 @@ public readonly record struct DockedPin(PixelRect Bounds, bool IsInside, bool Is
 
 public static class PinPlacement
 {
+    internal const int WindowPinWidth = 72;
+    internal const int WindowPinHeight = 26;
+
     public static DockedPin Calculate(PixelRect target, PixelRect workArea,
         PixelRect monitor, int dpi, bool maximized)
     {
@@ -13,8 +16,8 @@ public static class PinPlacement
         bool fullScreen = target.Left <= monitor.Left && target.Top <= monitor.Top &&
             target.Right >= monitor.Right && target.Bottom >= monitor.Bottom;
         var area = fullScreen ? monitor : workArea;
-        int width = Math.Min(Scale(72), Math.Min(target.Width, area.Width));
-        int height = Math.Min(Scale(26), Math.Min(target.Height, area.Height));
+        int width = Math.Min(Scale(WindowPinWidth), Math.Min(target.Width, area.Width));
+        int height = Math.Min(Scale(WindowPinHeight), Math.Min(target.Height, area.Height));
         int gap = Scale(4);
         int left = Math.Clamp(target.Left + (target.Width - width) / 2, area.Left, area.Right - width);
         int outsideTop = target.Top - height - gap;

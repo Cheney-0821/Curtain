@@ -49,7 +49,7 @@ internal sealed class CurtainSession : IDisposable
     public ProtectedWindowItem Item { get; }
     public bool IsDestroyed => _disposed || _hooks?.IsDestroyed == true;
     public event Action<CurtainSession, string>? Ended;
-    internal event Action<CurtainSession, PixelPoint>? ProtectionMenuRequested;
+    internal event Action<CurtainSession, PixelPoint, nint>? ProtectionMenuRequested;
     public event Action<string>? Notice;
     internal bool WaitForFirstFrame(Action callback) => _curtain?.WaitForFirstFrame(callback) == true;
 
@@ -102,6 +102,7 @@ internal sealed class CurtainSession : IDisposable
             _curtain.ProtectionMenuRequested += RequestProtectionMenu;
             _pin = new PinWindow();
             _pin.ToggleRequested += Toggle;
+            _pin.ContextMenuRequested += RequestPinMenu;
             stage = "owner-assignment";
             AssignOverlayOwner(_curtain.Handle, "CurtainOwner");
             AssignOverlayOwner(_pin.Handle, "PinOwner");
@@ -166,7 +167,8 @@ internal sealed class CurtainSession : IDisposable
         { }
         return process.ProcessName;
     }
-    internal bool OwnsOverlay(nint hwnd) => _curtain?.Handle == hwnd || _pin?.Handle == hwnd;
+    internal bool OwnsOverlay(nint hwnd) => _curtain?.Handle == hwnd || _pin?.Handle == hwnd ||
+        _curtain?.OwnsAreaPin(hwnd) == true;
     private bool IsCurrent() => _process is not null && TargetWindow.Matches(Target.Identity, _process);
     internal void Toggle() => SetClosed(!Target.IsClosed);
     internal void ConfigureWindowProtection(WindowProtectionSettings? custom, string? operationId = null)
@@ -208,12 +210,18 @@ internal sealed class CurtainSession : IDisposable
 
     internal void CancelClearRegionEdit() => _curtain?.EndClearRegionEdit(save: false);
 
-    private void RequestProtectionMenu(PixelPoint point) => ProtectionMenuRequested?.Invoke(this, point);
+    private void RequestProtectionMenu(PixelPoint point) => ProtectionMenuRequested?.Invoke(this, point, 0);
 
-    internal void ShowProtectionMenu(PixelPoint point, Action draw, Action<WindowProtectionSettings> configure, Action remove)
+    private void RequestPinMenu(PixelPoint point)
     {
-        if (!IsDestroyed && Target.IsClosed && !_idleForcedClosed)
-            _curtain?.ShowProtectionMenu(point, draw, configure, remove);
+        if (_pin is { } pin) ProtectionMenuRequested?.Invoke(this, point, pin.Handle);
+    }
+
+    internal void ShowProtectionMenu(PixelPoint point, nint pinHandle, Action draw,
+        Action<WindowProtectionSettings> configure, Action remove)
+    {
+        if (!IsDestroyed && (pinHandle != 0 || Target.IsClosed) && !_idleForcedClosed)
+            _curtain?.ShowProtectionMenu(pinHandle, point, draw, configure, remove);
     }
 
     internal void SetIdleForcedClosed(bool active, bool animate = false)
@@ -317,6 +325,7 @@ internal sealed class CurtainSession : IDisposable
         }
         if (_lastClosed != Target.IsClosed) { _lastClosed = Target.IsClosed; _pin.UpdateState(Target.IsClosed); }
         _pin.UpdatePlacement(placement, dpi);
+        _curtain.SetPrimaryPinBounds(placement.Bounds);
         if (_curtain.IsEditingClearRegions)
         {
             NativeMethods.SetWindowPos(_curtain.Handle, 0, bounds.Value.Left, bounds.Value.Top,
@@ -450,6 +459,7 @@ internal sealed class CurtainSession : IDisposable
         if (pin is not null)
         {
             Release("pin-unsubscribe", () => pin.ToggleRequested -= Toggle);
+            pin.ContextMenuRequested -= RequestPinMenu;
             Release("pin-close", pin.Close);
         }
         var curtain = _curtain; _curtain = null;

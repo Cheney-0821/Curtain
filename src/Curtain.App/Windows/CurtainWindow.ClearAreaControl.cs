@@ -20,13 +20,15 @@ internal sealed partial class CurtainWindow
     private double _areaOpacity, _areaFadeFrom, _areaFadeTarget;
 
     internal void SetPrimaryPinBounds(PixelRect bounds) => _primaryPinBounds = bounds;
-    internal bool OwnsAreaPin(nint hwnd) => _areaPin?.Handle == hwnd;
+    internal bool OwnsAreaControl(nint hwnd) => _areaPin?.Handle == hwnd || _areaResizeWindow?.Handle == hwnd;
 
     private void RefreshClearAreaControl()
     {
         UpdateOutlineLayout();
         if (!_desiredVisible || !_clearRegionsAllowed || IsEditingClearRegions || _clearRegions.Count == 0)
         {
+            EndAreaDrag(save: false);
+            HideAreaResizeWindow();
             FinishAreaTransition();
             _areaTimer?.Stop();
             HideAreaPin();
@@ -36,10 +38,17 @@ internal sealed partial class CurtainWindow
         if (_areaTimer is null)
         {
             _areaTimer = _dispatcher.CreateTimer();
-            _areaTimer.Interval = TimeSpan.FromMilliseconds(32);
             _areaTimer.Tick += OnAreaControlTick;
         }
+        UpdateAreaTimerInterval();
         if (!_areaTimer.IsRunning) _areaTimer.Start();
+    }
+
+    private void UpdateAreaTimerInterval()
+    {
+        if (_areaTimer is not { } timer) return;
+        var interval = TimeSpan.FromMilliseconds(_areaDrag is not null || _areaTransition is not null ? 16 : 32);
+        if (timer.Interval != interval) timer.Interval = interval;
     }
 
     private void OnAreaControlTick(DispatcherQueueTimer sender, object args)
@@ -47,11 +56,15 @@ internal sealed partial class CurtainWindow
         try
         {
             TickAreaTransition();
+            if (UpdateAreaDrag()) return;
+            SyncAreaResizeWindow();
             UpdateAreaHover();
         }
         catch (Exception ex)
         {
             // Losing the hover control must leave the existing protection intact.
+            EndAreaDrag(save: false);
+            HideAreaResizeWindow();
             HideAreaPin();
             sender.Stop();
             CurtainDiagnostics.WriteException("overlay.clear-area.control-failed", ex,
@@ -85,7 +98,7 @@ internal sealed partial class CurtainWindow
         {
             nint hit = NativeMethods.WindowFromPoint(cursor);
             nint root = hit == 0 ? 0 : NativeMethods.GetAncestor(hit, NativeMethods.GA_ROOT);
-            if (root != Handle && root != (nint)_protectedWindowHandle && root != _areaPin?.Handle)
+            if (root != Handle && root != (nint)_protectedWindowHandle && !OwnsAreaControl(root))
                 area = null;
         }
 
@@ -134,7 +147,9 @@ internal sealed partial class CurtainWindow
                 pin.Close();
                 throw new Win32Exception(error, "Unable to attach the clear-area control.");
             }
-            pin.ToggleRequested += ToggleHoveredArea;
+            pin.AreaPressed += BeginAreaMove;
+            pin.AreaReleased += ReleaseAreaDrag;
+            pin.AreaPointerMoved += ContinueAreaDragFromPointer;
             _areaPin = pin;
         }
         _areaPin.UpdateState(!area.IsClear);

@@ -50,5 +50,38 @@ internal static class ClearAreaTests
         var clippedPin = areas[0].ControlBounds(new(100, 100, 130, 150), 1);
         check(clippedPin is { Left: 100, Top: 114, Right: 130, Bottom: 140 },
             "control fits the clipped window and stays inside its frame");
+        CheckDrag(check);
+    }
+
+    private static void CheckDrag(Action<bool, string> check)
+    {
+        List<ClearArea> areas = [];
+        ClearArea.Add(areas, new(10, 10, 50, 50));
+        ClearArea.Add(areas, new(30, 40, 80, 60));
+        var area = areas[0];
+        area.IsClear = false;
+        check(area.ResizeEdgeAt(new(10, 10), 4) == (AreaResizeEdge.Left | AreaResizeEdge.Top) &&
+            area.ResizeEdgeAt(new(30, 28), 4) == AreaResizeEdge.None &&
+            area.ResizeEdgeAt(new(63, 40), 4) == AreaResizeEdge.Top,
+            "corners and actual concave edges are resizable without hitting the interior");
+        var viewport = new PixelRect(0, 0, 100, 100);
+        var resized = area.AdjustBounds(viewport, new(20, 30), AreaResizeEdge.Right | AreaResizeEdge.Bottom);
+        check(resized == new PixelRect(10, 10, 100, 90), "diagonal resize keeps opposite corner anchored");
+        check(area.AdjustBounds(viewport, new(100, 0), AreaResizeEdge.Left).Width == 4,
+            "inward resize respects the minimum region size");
+        var transformed = ClearArea.MoveOrResize(areas, area, resized);
+        check(!transformed.IsClear && transformed.Contains(new(79, 78)) && !transformed.Contains(new(85, 25)),
+            "resizing preserves blur state and the concave shape");
+        var translated = transformed.AdjustBounds(viewport, new(-90, -90), AreaResizeEdge.None);
+        check(translated == new PixelRect(0, 0, 90, 80), "moving stays within the window");
+        ClearArea.Add(areas, new(2, 2, 7, 7));
+        var moved = ClearArea.MoveOrResize(areas, transformed, translated);
+        check(areas.Count == 1 && !moved.IsClear, "moving into a clear area merges without revealing blurred content");
+
+        List<ClearArea> clear = [];
+        ClearArea.Add(clear, new(10, 10, 30, 20));
+        var revealed = ClearArea.MoveOrResize(clear, clear[0], new(40, 30, 60, 40));
+        check(revealed.IsClear && revealed.Contains(new(41, 31)) && !revealed.Contains(new(10, 10)),
+            "moving a clear area preserves its state and removes its old footprint");
     }
 }

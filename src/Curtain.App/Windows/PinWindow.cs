@@ -33,7 +33,12 @@ internal sealed class PinWindow
     internal bool IsVisible => NativeMethods.IsWindowVisible(Handle);
     internal bool IsPressed => _pressed;
     public event Action? ToggleRequested;
+    internal event Action? AreaPressed, AreaReleased;
+    internal event Action<nint>? AreaPointerMoved;
     public event Action<PixelPoint>? ContextMenuRequested;
+
+    internal bool AreaDragging { get; set; }
+    internal void ReleaseAreaPress() => BeginPress(false);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern nint SetTimer(nint hwnd, nint idEvent, uint interval, nint callback);
@@ -229,6 +234,11 @@ internal sealed class PinWindow
             try
             {
                 if (message == 0x21) return 3; // MA_NOACTIVATE
+                if (message == 0x20 && window.AreaDragging)
+                {
+                    ClearAreaResizeWindow.UseCursor(AreaResizeEdge.None);
+                    return 1;
+                }
                 if (message == 0x84 && (window._fullScreen || window._areaControl) &&
                     NativeMethods.GetCursorPos(out var hitPoint) && !window.ContainsPoint(hitPoint))
                     return -1; // HTTRANSPARENT outside the visible capsule.
@@ -238,17 +248,25 @@ internal sealed class PinWindow
                     var track = new HandleNative.Track { Size = (uint)Marshal.SizeOf<HandleNative.Track>(), Flags = 2, Window = hwnd };
                     HandleNative.TrackMouseEvent(ref track);
                 }
+                if (message == 0x200 && window._areaControl && window._pressed)
+                    window.AreaPointerMoved?.Invoke(hwnd);
                 if (message == 0x2A3)
                 {
-                    window.BeginPress(false);
+                    if (!window._areaControl) window.BeginPress(false);
                     window.BeginHover(false);
                 }
-                if (message == 0x201) { window.BeginPress(true); return 0; }
+                if (message == 0x201)
+                {
+                    window.BeginPress(true);
+                    if (window._areaControl) window.AreaPressed?.Invoke();
+                    return 0;
+                }
                 if (message == 0x202)
                 {
                     bool pressed = window._pressed;
                     window.BeginPress(false);
-                    if (pressed && (!(window._fullScreen || window._areaControl) ||
+                    if (pressed && window._areaControl) window.AreaReleased?.Invoke();
+                    else if (pressed && (!window._fullScreen ||
                         NativeMethods.GetCursorPos(out var point) && window.ContainsPoint(point)))
                         window.ToggleRequested?.Invoke();
                     return 0;

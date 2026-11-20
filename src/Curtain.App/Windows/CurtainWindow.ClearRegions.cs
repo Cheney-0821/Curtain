@@ -19,6 +19,7 @@ internal sealed partial class CurtainWindow
     private CompositionColorBrush? _regionInk;
     private CompositionColorBrush? _regionTint;
     private readonly List<(CompositionGeometry Geometry, CompositionSpriteShape Shape)> _regionShapes = [];
+    private readonly Dictionary<ClearArea, CompositionContainerShape> _regionOutlineGroups = [];
     private CompositionRectangleGeometry? _regionPreview;
     private Action<bool>? _regionEditFinished;
     private RegionEditorFeedback? _regionFeedback;
@@ -217,13 +218,12 @@ internal sealed partial class CurtainWindow
     private void RebuildRegionOutlines()
     {
         ClearRegionOutlines();
+        _areaBandsDirty = true;
         bool editing = IsEditingClearRegions;
         var areas = _regionDraft ?? _clearRegions;
         if (!editing && areas.All(area => area.IsClear)) return;
-        _regionOutlines = _compositor.CreateShapeVisual();
-        _regionInk = _compositor.CreateColorBrush(Color.FromArgb(255, 0, 120, 212));
-        if (editing) _regionTint = _compositor.CreateColorBrush(Color.FromArgb(24, 0, 80, 145));
-        _visual.Children.InsertAtTop(_regionOutlines);
+        CreateRegionOutlineLayer(editing);
+        var shapes = _regionOutlines!.Shapes;
 
         foreach (var area in areas)
         {
@@ -234,39 +234,59 @@ internal sealed partial class CurtainWindow
                     var fill = _compositor.CreateRectangleGeometry();
                     fill.Offset = new(tile.Left, tile.Top);
                     fill.Size = new(tile.Width, tile.Height);
-                    AddShape(fill).FillBrush = _regionTint;
+                    AddRegionShape(shapes, fill, stroke: false).FillBrush = _regionTint;
                 }
             }
-            if (!editing && area.IsClear) continue;
-            foreach (var edge in area.Edges)
-            {
-                var line = _compositor.CreateLineGeometry();
-                line.Start = new(edge.Start.X, edge.Start.Y);
-                line.End = new(edge.End.X, edge.End.Y);
-                AddStroke(line);
-            }
+            if (editing || !area.IsClear) AddRegionOutline(area);
         }
         if (editing)
         {
             _regionPreview = _compositor.CreateRectangleGeometry();
-            AddStroke(_regionPreview).FillBrush = _regionTint;
+            AddRegionShape(shapes, _regionPreview, stroke: true).FillBrush = _regionTint;
         }
         UpdateOutlineLayout();
+    }
 
-        CompositionSpriteShape AddShape(CompositionGeometry geometry)
+    private void CreateRegionOutlineLayer(bool editing)
+    {
+        _regionOutlines = _compositor.CreateShapeVisual();
+        _regionInk = _compositor.CreateColorBrush(Color.FromArgb(255, 0, 120, 212));
+        if (editing) _regionTint = _compositor.CreateColorBrush(Color.FromArgb(24, 0, 80, 145));
+        _visual.Children.InsertAtTop(_regionOutlines);
+    }
+
+    private CompositionContainerShape AddRegionOutline(ClearArea area)
+    {
+        if (_regionOutlines is null)
         {
-            var shape = _compositor.CreateSpriteShape(geometry);
-            _regionOutlines.Shapes.Add(shape);
-            _regionShapes.Add((geometry, shape));
-            return shape;
+            CreateRegionOutlineLayer(editing: false);
+            UpdateOutlineLayout();
         }
-        CompositionSpriteShape AddStroke(CompositionGeometry geometry)
+        var group = _compositor.CreateContainerShape();
+        _regionOutlines!.Shapes.Add(group);
+        _regionOutlineGroups.Add(area, group);
+        foreach (var edge in area.Edges)
         {
-            var shape = AddShape(geometry);
+            var line = _compositor.CreateLineGeometry();
+            line.Start = new(edge.Start.X, edge.Start.Y);
+            line.End = new(edge.End.X, edge.End.Y);
+            AddRegionShape(group.Shapes, line, stroke: true);
+        }
+        return group;
+    }
+
+    private CompositionSpriteShape AddRegionShape(CompositionShapeCollection collection,
+        CompositionGeometry geometry, bool stroke)
+    {
+        var shape = _compositor.CreateSpriteShape(geometry);
+        collection.Add(shape);
+        _regionShapes.Add((geometry, shape));
+        if (stroke)
+        {
             shape.StrokeBrush = _regionInk;
             shape.StrokeThickness = 2;
-            return shape;
         }
+        return shape;
     }
 
     private void ClearRegionOutlines()
@@ -274,6 +294,12 @@ internal sealed partial class CurtainWindow
         if (_regionOutlines is not { } outlines) return;
         _visual.Children.Remove(outlines);
         outlines.Shapes.Clear();
+        foreach (var group in _regionOutlineGroups.Values)
+        {
+            group.Shapes.Clear();
+            group.Dispose();
+        }
+        _regionOutlineGroups.Clear();
         foreach (var (geometry, shape) in _regionShapes)
         {
             shape.Dispose();

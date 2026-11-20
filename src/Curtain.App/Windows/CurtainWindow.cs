@@ -444,6 +444,8 @@ internal sealed partial class CurtainWindow
         if (IsEditingClearRegions) EndClearRegionEdit(save: false, notify: false);
         CancelAndHide(); _disposed = true;
         if (_areaTimer is { } areaTimer) areaTimer.Tick -= OnAreaControlTick;
+        _areaResizeWindow?.Dispose();
+        _areaResizeWindow = null;
         _areaPin?.Close();
         _areaPin = null;
         ClearRegionOutlines();

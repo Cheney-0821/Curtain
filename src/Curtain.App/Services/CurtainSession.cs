@@ -168,7 +168,7 @@ internal sealed class CurtainSession : IDisposable
         return process.ProcessName;
     }
     internal bool OwnsOverlay(nint hwnd) => _curtain?.Handle == hwnd || _pin?.Handle == hwnd ||
-        _curtain?.OwnsAreaPin(hwnd) == true;
+        _curtain?.OwnsAreaControl(hwnd) == true;
     private bool IsCurrent() => _process is not null && TargetWindow.Matches(Target.Identity, _process);
     internal void Toggle() => SetClosed(!Target.IsClosed);
     internal void ConfigureWindowProtection(WindowProtectionSettings? custom, string? operationId = null)

@@ -2,17 +2,23 @@ namespace Curtain.Core.Geometry;
 
 public readonly record struct AreaEdge(PixelPoint Start, PixelPoint End);
 
+[Flags]
+public enum AreaResizeEdge { None = 0, Left = 1, Top = 2, Right = 4, Bottom = 8 }
+
 // Coordinates are relative to the protected window, in logical pixels.
 public sealed class ClearArea
 {
     public IReadOnlyList<PixelRect> Tiles { get; }
     public IReadOnlyList<AreaEdge> Edges { get; }
+    public PixelRect Bounds { get; }
     public bool IsClear { get; set; }
 
     private ClearArea(IReadOnlyList<PixelRect> tiles, bool isClear)
     {
         Tiles = tiles;
         Edges = FindEdges(tiles);
+        Bounds = new(tiles.Min(tile => tile.Left), tiles.Min(tile => tile.Top),
+            tiles.Max(tile => tile.Right), tiles.Max(tile => tile.Bottom));
         IsClear = isClear;
     }
 
@@ -20,6 +26,94 @@ public sealed class ClearArea
         point.X >= rect.Left && point.X < rect.Right && point.Y >= rect.Top && point.Y < rect.Bottom;
 
     public bool Contains(PixelPoint point) => Tiles.Any(tile => Contains(tile, point));
+
+    public AreaResizeEdge ResizeEdgeAt(PixelPoint point, int padding)
+    {
+        AreaEdge? horizontal = null, vertical = null;
+        int dx = padding + 1, dy = padding + 1;
+        foreach (var edge in Edges)
+        {
+            if (edge.Start.X == edge.End.X)
+            {
+                int distance = Math.Abs(point.X - edge.Start.X);
+                if (distance >= dx || point.Y < edge.Start.Y - padding || point.Y > edge.End.Y + padding) continue;
+                (vertical, dx) = (edge, distance);
+            }
+            else
+            {
+                int distance = Math.Abs(point.Y - edge.Start.Y);
+                if (distance >= dy || point.X < edge.Start.X - padding || point.X > edge.End.X + padding) continue;
+                (horizontal, dy) = (edge, distance);
+            }
+        }
+        if (vertical is { } v && horizontal is { } h)
+        {
+            var joint = new PixelPoint(v.Start.X, h.Start.Y);
+            bool corner = (joint == v.Start || joint == v.End) && (joint == h.Start || joint == h.End);
+            if (!corner)
+            {
+                if (dx < dy) horizontal = null;
+                else vertical = null;
+            }
+        }
+
+        AreaResizeEdge result = AreaResizeEdge.None;
+        if (vertical is { } x)
+            result = Contains(new(x.Start.X, Math.Clamp(point.Y, x.Start.Y, x.End.Y - 1)))
+                ? AreaResizeEdge.Left : AreaResizeEdge.Right;
+        if (horizontal is { } y)
+            result |= Contains(new(Math.Clamp(point.X, y.Start.X, y.End.X - 1), y.Start.Y))
+                ? AreaResizeEdge.Top : AreaResizeEdge.Bottom;
+        return result;
+    }
+
+    public PixelRect AdjustBounds(PixelRect viewport, PixelPoint offset, AreaResizeEdge edge)
+    {
+        int width = Math.Min(Bounds.Width, viewport.Width), height = Math.Min(Bounds.Height, viewport.Height);
+        if (edge == AreaResizeEdge.None)
+        {
+            int x = Math.Clamp(Bounds.Left + offset.X, viewport.Left, viewport.Right - width);
+            int y = Math.Clamp(Bounds.Top + offset.Y, viewport.Top, viewport.Bottom - height);
+            return new(x, y, x + width, y + height);
+        }
+        int left = Math.Clamp(Bounds.Left, viewport.Left, viewport.Right - 1);
+        int right = Math.Clamp(Bounds.Right, left + 1, viewport.Right);
+        int top = Math.Clamp(Bounds.Top, viewport.Top, viewport.Bottom - 1);
+        int bottom = Math.Clamp(Bounds.Bottom, top + 1, viewport.Bottom);
+        int minWidth = Math.Min(4, right - left), minHeight = Math.Min(4, bottom - top);
+        if (edge.HasFlag(AreaResizeEdge.Left)) left = Math.Clamp(left + offset.X, viewport.Left, right - minWidth);
+        if (edge.HasFlag(AreaResizeEdge.Right)) right = Math.Clamp(right + offset.X, left + minWidth, viewport.Right);
+        if (edge.HasFlag(AreaResizeEdge.Top)) top = Math.Clamp(top + offset.Y, viewport.Top, bottom - minHeight);
+        if (edge.HasFlag(AreaResizeEdge.Bottom)) bottom = Math.Clamp(bottom + offset.Y, top + minHeight, viewport.Bottom);
+        return new(left, top, right, bottom);
+    }
+
+    public PixelPoint MapPoint(PixelPoint point, PixelRect destination) =>
+        new(destination.Left + (int)Math.Round((point.X - Bounds.Left) * (double)destination.Width / Bounds.Width),
+            destination.Top + (int)Math.Round((point.Y - Bounds.Top) * (double)destination.Height / Bounds.Height));
+
+    public static ClearArea MoveOrResize(List<ClearArea> areas, ClearArea area, PixelRect destination)
+    {
+        if (destination == area.Bounds || !destination.IsValid) return area;
+        var tiles = area.Tiles.Select(tile =>
+        {
+            var start = area.MapPoint(new(tile.Left, tile.Top), destination);
+            var end = area.MapPoint(new(tile.Right, tile.Bottom), destination);
+            return new PixelRect(start.X, start.Y, end.X, end.Y);
+        }).Where(tile => tile.IsValid).ToArray();
+        if (tiles.Length == 0) return area;
+
+        var joined = areas.Where(other => other != area &&
+            other.Tiles.Any(tile => tiles.Any(next => Connects(tile, next)))).ToArray();
+        var merged = Union([.. tiles, .. joined.SelectMany(other => other.Tiles)]);
+        if (merged.Count + areas.Sum(other => other.Tiles.Count) - area.Tiles.Count -
+            joined.Sum(other => other.Tiles.Count) > 256) return area;
+
+        var replacement = new ClearArea(merged, area.IsClear && joined.All(other => other.IsClear));
+        areas[areas.IndexOf(area)] = replacement;
+        foreach (var other in joined) areas.Remove(other);
+        return replacement;
+    }
 
     public static PixelRect ScaleTile(PixelRect tile, float scale) =>
         new((int)MathF.Round(tile.Left * scale), (int)MathF.Round(tile.Top * scale),

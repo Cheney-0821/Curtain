@@ -33,7 +33,7 @@ internal sealed partial class CurtainWindow
         }
         area.IsClear = !area.IsClear;
         _areaTransition = new(area, from, area.IsClear ? 0 : 255, now);
-        if (_areaTimer is { } timer) timer.Interval = TimeSpan.FromMilliseconds(16);
+        UpdateAreaTimerInterval();
         _regionLayout = null;
         UpdateClearRegionSurface();
     }
@@ -59,7 +59,7 @@ internal sealed partial class CurtainWindow
     {
         _areaTransition = null;
         _regionLayout = null;
-        if (_areaTimer is { } timer) timer.Interval = TimeSpan.FromMilliseconds(32);
+        UpdateAreaTimerInterval();
     }
 
     private void ApplyAreaBlur(double amount) =>

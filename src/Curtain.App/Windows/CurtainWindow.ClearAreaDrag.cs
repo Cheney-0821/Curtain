@@ -25,6 +25,7 @@ internal sealed partial class CurtainWindow
         internal PixelPoint? LastPoint { get; set; }
         internal long LastPreviewTick { get; set; }
         internal CompositionContainerShape? Outline { get; set; }
+        internal LiveAreaMask? LiveMask { get; set; }
     }
 
     private bool CanDragArea => _desiredVisible && IsVisible && _clearRegionsAllowed &&
@@ -192,6 +193,11 @@ internal sealed partial class CurtainWindow
         float sx = (float)next.Width / start.Width, sy = (float)next.Height / start.Height;
         drag.Outline!.TransformMatrix = new Matrix3x2(sx, 0, 0, sy,
             next.Left - start.Left * sx, next.Top - start.Top * sy);
+        if (!started && drag.Edge == AreaResizeEdge.None && drag.Area.IsClear)
+            _ = StartLiveAreaMaskAsync(drag);
+        else if (drag.LiveMask?.Ready == true)
+            ApplyLiveAreaPosition(drag);
+
         if (drag.Edge == AreaResizeEdge.None && _areaPin is { } pin)
         {
             int dx = (int)MathF.Round((next.Left - start.Left) * drag.Scale);
@@ -226,6 +232,8 @@ internal sealed partial class CurtainWindow
     {
         if (_areaDrag is not { } drag) return;
         _areaDrag = null;
+        bool hadLiveMask = drag.LiveMask is not null;
+        drag.LiveMask?.Dispose();
         UpdateAreaTimerInterval();
         if (GetCapture() == drag.Input) ReleaseCapture();
         if (_areaPin is { } pin)
@@ -247,6 +255,11 @@ internal sealed partial class CurtainWindow
                 CurtainDiagnostics.Write("overlay.clear-area.adjusted", operationId: _operationId,
                     stage: "window-protection", reasonCode: drag.Edge == AreaResizeEdge.None ? "Moved" : "Resized",
                     hwnd: Handle.ToInt64(), targetProcessId: (int)_protectedProcessId, sessionId: _sessionId, ruleId: _ruleId);
+        }
+        else if (hadLiveMask)
+        {
+            _regionLayout = null;
+            UpdateClearRegionSurface();
         }
         RebuildRegionOutlines();
     }

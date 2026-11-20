@@ -12,6 +12,7 @@ namespace Curtain.App.Windows;
 internal sealed partial class CurtainWindow
 {
     private const int RegionDifference = 4;
+    private const int RegionUnion = 2;
     private List<ClearArea> _clearRegions = [];
     private List<ClearArea>? _regionDraft;
     private PixelPoint? _drawStart;
@@ -51,13 +52,43 @@ internal sealed partial class CurtainWindow
         if (_regionLayout == layout) return;
         int width = (int)layout.Size.X, height = (int)layout.Size.Y;
         var transitioning = layout.UseAreas ? _areaTransition?.Area : null;
+        var drag = layout.UseAreas && _areaDrag is { LiveMask: not null, Preview: not null } active &&
+            active.Frame.Width == width && active.Frame.Height == height && active.Scale == layout.Scale
+            ? active : null;
         var holes = layout.UseAreas
-            ? _clearRegions.Where(area => area.IsClear && area != transitioning)
+            ? _clearRegions.Where(area => area.IsClear && area != transitioning && area != drag?.Area)
                 .SelectMany(area => area.VisibleTiles(width, height, layout.Scale, layout.CoveredPopup)).ToArray()
             : [];
         var animated = transitioning?.VisibleTiles(width, height, layout.Scale, layout.CoveredPopup).ToArray() ?? [];
 
-        UpdateAreaBlurClips(new(0, 0, width, height), holes, animated);
+        var bounds = new PixelRect(0, 0, width, height);
+        UpdateAreaBlurClips(bounds, holes, animated);
+        _regionLayout = layout;
+        try
+        {
+            if (drag is { LiveMask: { } mask, Preview: { } preview })
+            {
+                ConfigureLiveAreaMask(mask, drag.Area, preview, bounds, layout.Scale, holes, layout.CoveredPopup);
+                if (mask.Ready)
+                {
+                    ApplyLiveAreaPosition(drag);
+                    return;
+                }
+
+                // Hold the original native cutout until the compositor drops its old clip.
+                holes = [.. holes, .. drag.Area.VisibleTiles(width, height, layout.Scale, layout.CoveredPopup)];
+            }
+            ApplyStaticWindowRegion(bounds, holes);
+        }
+        catch
+        {
+            _regionLayout = null;
+            throw;
+        }
+    }
+
+    private void ApplyStaticWindowRegion(PixelRect bounds, PixelRect[] holes)
+    {
         if (holes.Length == 0)
         {
             if (_hasWindowRegion)
@@ -66,33 +97,37 @@ internal sealed partial class CurtainWindow
                     throw new System.ComponentModel.Win32Exception();
                 _hasWindowRegion = false;
             }
-            _regionLayout = layout;
             return;
         }
 
-        nint region = CreateRectRgn(0, 0, width, height);
+        nint region = CreateRectRgn(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom);
         try
         {
             if (region == 0) throw new System.ComponentModel.Win32Exception();
-            foreach (var tile in holes)
-            {
-                nint cutout = CreateRectRgn(tile.Left, tile.Top, tile.Right, tile.Bottom);
-                if (cutout == 0) throw new System.ComponentModel.Win32Exception();
-                try
-                {
-                    if (CombineRgn(region, region, cutout, RegionDifference) == 0)
-                        throw new System.ComponentModel.Win32Exception();
-                }
-                finally { HandleNative.DeleteObject(cutout); }
-            }
-
-            if (SetWindowRgn(Handle, region, IsVisible) == 0)
-                throw new System.ComponentModel.Win32Exception();
-            region = 0; // Windows owns the region after a successful call.
-            _regionLayout = layout;
-            _hasWindowRegion = true;
+            foreach (var tile in holes) CombineRegionRectangle(region, tile, RegionDifference);
+            AssignWindowRegion(ref region);
         }
         finally { if (region != 0) HandleNative.DeleteObject(region); }
+    }
+
+    private void AssignWindowRegion(ref nint region)
+    {
+        if (SetWindowRgn(Handle, region, IsVisible) == 0)
+            throw new System.ComponentModel.Win32Exception();
+        region = 0; // Windows owns the region after a successful call.
+        _hasWindowRegion = true;
+    }
+
+    private static void CombineRegionRectangle(nint region, PixelRect tile, int mode)
+    {
+        nint rectangle = CreateRectRgn(tile.Left, tile.Top, tile.Right, tile.Bottom);
+        if (rectangle == 0) throw new System.ComponentModel.Win32Exception();
+        try
+        {
+            if (CombineRgn(region, region, rectangle, mode) == 0)
+                throw new System.ComponentModel.Win32Exception();
+        }
+        finally { HandleNative.DeleteObject(rectangle); }
     }
 
     internal bool BeginClearRegionEdit(PixelRect bounds, int dpi, Action<bool> finished)

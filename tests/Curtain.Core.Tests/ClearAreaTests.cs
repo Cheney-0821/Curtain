@@ -25,19 +25,21 @@ internal static class ClearAreaTests
         check(!ClearArea.Add(areas, new(52, 54, 76, 86)) && areas[0] == merged,
             "a draw covered by multiple tiles is also a no-op");
         var pin = merged.ControlBounds(new(-300, 100, 0, 350), 1.25f);
-        check(pin is { Left: -283, Top: 118, Right: -193, Bottom: 150 },
-            "control is centered above the top span at mixed DPI and negative screen coordinates");
+        check(pin is { Left: -283, Top: 110, Right: -193, Bottom: 142 },
+            "control is centered above the top span with the scaled window handle gap");
         var windowPin = PinPlacement.Calculate(new(-300, 100, 0, 350), new(-500, 0, 0, 500),
             new(-500, 0, 0, 500), 120, false).Bounds;
         check(pin?.Width == windowPin.Width && pin?.Height == windowPin.Height,
             "area pin matches window pin dimensions at the same DPI");
-        var protectedPopup = new PixelRect(62, 62, 72, 68);
-        var visible = merged.VisibleTiles(92, 85, 1, protectedPopup).ToArray();
+        var popup = new PixelRect(62, 45, 91, 78);
+        var visible = merged.VisibleTiles(92, 85, 1).ToArray();
+        var overlap = new PixelPoint(66, 65);
+        var covered = new PixelPoint(90, 49);
         check(visible.All(tile => tile.Right <= 92 && tile.Bottom <= 85) &&
-            visible.All(tile => !ClearArea.Contains(tile, new(66, 65))) &&
-            visible.Any(tile => ClearArea.Contains(tile, new(61, 65))) &&
-            visible.Sum(tile => tile.Width * tile.Height) == 2490,
-            "rendering and input use the same clipped union without revealing protected popups");
+            ClearArea.Contains(popup, overlap) && visible.Any(tile => ClearArea.Contains(tile, overlap)) &&
+            ClearArea.Contains(popup, covered) && visible.All(tile => !ClearArea.Contains(tile, covered)) &&
+            visible.Sum(tile => tile.Width * tile.Height) == 2550,
+            "a popup crossing the clear boundary inherits both the clear and blurred parts");
 
         ClearArea.Add(areas, new(120, 90, 150, 115));
         check(areas.Count == 2 && areas[1].IsClear, "separate area starts clear independently");
@@ -48,7 +50,7 @@ internal static class ClearAreaTests
         var hiddenPin = areas[0].ControlBounds(new(0, 0, 10, 10), 1);
         check(hiddenPin is null, "a fully clipped area has no hover control");
         var clippedPin = areas[0].ControlBounds(new(100, 100, 130, 150), 1);
-        check(clippedPin is { Left: 100, Top: 114, Right: 130, Bottom: 140 },
+        check(clippedPin is { Left: 100, Top: 108, Right: 130, Bottom: 134 },
             "control fits the clipped window and stays inside its frame");
         CheckDrag(check);
     }

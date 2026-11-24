@@ -17,6 +17,13 @@ public sealed record GlobalHotkeySettings(bool Enabled = true, uint Modifiers = 
 
 public enum AutoProtectionScope { AddedWindows = 0, AllDisplays = 1 }
 
+public sealed record ScreenProtectionTarget(bool PrimaryOnly = false, string? DisplayId = null, string? DisplayLabel = null)
+{
+    public bool Includes(bool isPrimary, string? deviceId) => !string.IsNullOrEmpty(DisplayId)
+        ? string.Equals(DisplayId, deviceId, StringComparison.OrdinalIgnoreCase)
+        : !PrimaryOnly || isPrimary;
+}
+
 public static class OverlayBlurPreset
 {
     public const string Light = "Light";
@@ -53,7 +60,7 @@ public static class AppLanguage
 }
 
 public sealed record AutoProtectionSettings(bool Enabled = false, int IdleMinutes = 3,
-    AutoProtectionScope Scope = AutoProtectionScope.AddedWindows);
+    AutoProtectionScope Scope = AutoProtectionScope.AddedWindows, ScreenProtectionTarget? DisplayTarget = null);
 
 public sealed record CurtainUserSettings
 {
@@ -65,6 +72,7 @@ public sealed record CurtainUserSettings
     public bool AutoDownloadUpdates { get; init; } = true;
     public GlobalHotkeySettings Hotkey { get; init; } = new();
     public AutoProtectionSettings AutoProtection { get; init; } = new();
+    public ScreenProtectionTarget ManualScreenTarget { get; init; } = new();
     public GlobalHotkeySettings PrivacyHotkey { get; init; } = new(true, HotkeyModifier.Control, 0x28);
     public PrivacyMouseButton PrivacyMouseButton { get; init; } = PrivacyMouseButton.Off;
     public string BlurPreset { get; init; } = OverlayBlurPreset.Standard;
@@ -179,6 +187,7 @@ public sealed class CurtainUserSettingsStore
         Hotkey = settings.Hotkey is null ? null! : settings.Hotkey with { Enabled = true },
         BlurPreset = OverlayBlurPreset.Normalize(settings.BlurPreset),
         Language = AppLanguage.Normalize(settings.Language),
+        ManualScreenTarget = settings.ManualScreenTarget ?? new(),
         WindowProtection = WindowBlurScale.Normalize(settings.WindowProtection ?? new()),
         PrivacyMouseButton = Enum.IsDefined(settings.PrivacyMouseButton) ? settings.PrivacyMouseButton : PrivacyMouseButton.Off
     };

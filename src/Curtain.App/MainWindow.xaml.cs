@@ -20,8 +20,10 @@ public sealed partial class MainWindow : Window
     private readonly CurtainManager _manager;
     private readonly ScreenPrivacyManager _screenPrivacy;
     private readonly IdleProtectionMonitor _idleMonitor;
-    private bool _manualScreenActive;
     private AutoProtectionScope? _idleScope;
+    private IReadOnlyList<ScreenRect> _connectedDisplays = [];
+    private readonly Dictionary<string, string?> _displayNames = new(StringComparer.OrdinalIgnoreCase);
+    private bool _idleDisplayUnavailable;
     private const int PrivacyHotkeyId = 0x4353;
     private readonly GlobalHotkey _privacyHotkey;
     private PrivacyMouseHook? _privacyMouseHook;
@@ -134,6 +136,11 @@ public sealed partial class MainWindow : Window
         AppWindow.Closing += OnWindowClosing;
         Closed += OnWindowClosed;
 
+        try { RefreshScreenTargets(); }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            CurtainDiagnostics.WriteException("fullscreen.displays.enumeration-failed", ex, stage: "startup");
+        }
         UpdateLocalizedScopeItems();
         ApplySettingsToControls();
         Localized.RefreshAll();
@@ -162,7 +169,7 @@ public sealed partial class MainWindow : Window
         StartAutomaticUpdateTimer(initial: true);
         _idleMonitor = new(DispatcherQueue, () => _settings.AutoProtection,
             () => _idleScope.HasValue, ActivateIdleProtection,
-            () => { if (_screenPrivacy.HasOverlays) _screenPrivacy.RefreshDisplays(); },
+            RefreshScreenTargets,
             () => { if (_idleScope == AutoProtectionScope.AddedWindows)
                 _manager.ReapplyIdleForcedClosed(); });
         DiagnosticsPageControl.Configure(_settings.DiagnosticsEnabled, _settings.IncludeRawEtw,
@@ -268,7 +275,7 @@ public sealed partial class MainWindow : Window
         Localized.SetText(AddWindowTitleText, "AddWindowTitle");
         Localized.SetContent(PickButton, "AddWindowButton");
         Localized.SetAutomationName(PickButton, "AddWindowButton");
-        Localized.SetContent(ScreenPrivacyButton, "ProtectScreenButton");
+        ScreenPrivacyButton.Content = LocalizationService.Get("ProtectScreenButton");
         Localized.SetAutomationName(ScreenPrivacyButton, "ProtectScreenButton");
         Localized.SetContent(ResumeAutoButton, "EndAutoProtectionButton");
         Localized.SetText(CandidateText, "PickerHelp");
@@ -365,14 +372,94 @@ public sealed partial class MainWindow : Window
     {
         bool wasLoading = _loadingSettings;
         _loadingSettings = true;
-        int selected = IdleScopeCombo.SelectedIndex;
-        IdleScopeCombo.ItemsSource = new[]
-        {
-            LocalizationService.Get("ScopeAddedWindows"),
-            LocalizationService.Get("ScopeAllDisplays")
-        };
-        IdleScopeCombo.SelectedIndex = selected is 0 or 1 ? selected : 0;
+        ScreenProtectionTarget? selected = _settings.AutoProtection.Scope == AutoProtectionScope.AddedWindows
+            ? null : _settings.AutoProtection.DisplayTarget ?? new();
+        var choices = GetScreenTargets(selected).Prepend(new ScreenTargetOption(
+            LocalizationService.Get("ScopeAddedWindows"), null))
+            .Select(choice => new ComboBoxItem { Content = choice.Label, Tag = choice }).ToArray();
+        IdleScopeCombo.ItemsSource = choices;
+        IdleScopeCombo.SelectedItem = choices.First(item => SameScreenTarget(((ScreenTargetOption)item.Tag).Target, selected));
         _loadingSettings = wasLoading;
+    }
+
+    private sealed record ScreenTargetOption(string Label, ScreenProtectionTarget? Target, bool Available = true);
+
+    private IEnumerable<ScreenTargetOption> GetScreenTargets(ScreenProtectionTarget? selected)
+    {
+        yield return new(LocalizationService.Get("ScopeAllDisplays"), new());
+        yield return new(LocalizationService.Get("ScopePrimaryDisplay"), new(PrimaryOnly: true));
+        foreach (var display in _connectedDisplays.Where(d => d.DeviceId is not null &&
+                     (!d.IsPrimary || string.Equals(d.DeviceId, selected?.DisplayId, StringComparison.OrdinalIgnoreCase)))
+                     .OrderBy(d => d.Number))
+        {
+            string? name = _displayNames.GetValueOrDefault(display.DeviceId!) ?? display.DeviceName;
+            string label = display.Number > 0
+                ? string.IsNullOrWhiteSpace(name)
+                    ? LocalizationService.Get("ScopeDisplayNumber", display.Number)
+                    : LocalizationService.Get("ScopeNamedDisplay", display.Number, name)
+                : name ?? LocalizationService.Get("ScopeSelectedDisplay");
+            yield return new(label, new(DisplayId: display.DeviceId, DisplayLabel: label));
+        }
+        if (selected is { DisplayId: { Length: > 0 } id } && !_connectedDisplays.Any(d =>
+                string.Equals(d.DeviceId, id, StringComparison.OrdinalIgnoreCase)))
+            yield return new(LocalizationService.Get("ScopeDisplayOffline",
+                selected.DisplayLabel ?? LocalizationService.Get("ScopeSelectedDisplay")), selected, Available: false);
+    }
+
+    private static bool SameScreenTarget(ScreenProtectionTarget? a, ScreenProtectionTarget? b) =>
+        a?.PrimaryOnly == b?.PrimaryOnly && string.Equals(a?.DisplayId, b?.DisplayId, StringComparison.OrdinalIgnoreCase);
+
+    private void RefreshScreenTargets()
+    {
+        var displays = PrivacyNative.Displays();
+        if (!_connectedDisplays.SequenceEqual(displays))
+        {
+            _connectedDisplays = displays;
+            UpdateLocalizedScopeItems();
+            foreach (var display in displays)
+                if (display.DeviceId is { } id && _displayNames.TryAdd(id, null)) _ = LoadDisplayNameAsync(id);
+        }
+        bool hadCoverage = _screenPrivacy.HasOverlays;
+        _screenPrivacy.RefreshDisplays(displays);
+        if (_screenPrivacy.IsActive && hadCoverage && !_screenPrivacy.HasOverlays)
+            OnNotice("ScopeDisplayUnavailable");
+    }
+
+    private async Task LoadDisplayNameAsync(string id)
+    {
+        try
+        {
+            var monitor = await global::Windows.Devices.Display.DisplayMonitor.FromInterfaceIdAsync(id);
+            if (_disposed || string.IsNullOrWhiteSpace(monitor?.DisplayName)) return;
+            _displayNames[id] = monitor.DisplayName;
+            UpdateLocalizedScopeItems();
+            UpdateScreenButtons();
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or ArgumentException)
+        {
+            // The GDI name remains available if the monitor disconnected during the lookup.
+        }
+    }
+
+    private void OnScreenPrivacyScopesOpening(object sender, object args)
+    {
+        ScreenPrivacyScopes.Items.Clear();
+        foreach (var option in GetScreenTargets(_settings.ManualScreenTarget))
+        {
+            var item = new RadioMenuFlyoutItem
+            {
+                Text = option.Label, GroupName = "ScreenProtectionTargets",
+                IsChecked = SameScreenTarget(option.Target, _settings.ManualScreenTarget), IsEnabled = option.Available
+            };
+            item.Click += (_, _) =>
+            {
+                var previous = _settings;
+                _settings = _settings with { ManualScreenTarget = option.Target! };
+                if (!SaveSettings()) _settings = previous;
+                UpdateScreenButtons();
+            };
+            ScreenPrivacyScopes.Items.Add(item);
+        }
     }
 
     private void OnPickerPreviewChanged(LocalizationMessage message) =>
@@ -491,7 +578,7 @@ public sealed partial class MainWindow : Window
     private void OnProtectionWarningClosed(InfoBar sender, InfoBarClosedEventArgs args) =>
         sender.Visibility = Visibility.Collapsed;
 
-    private void OnScreenPrivacyClick(object sender, RoutedEventArgs e) => ToggleManualScreen();
+    private void OnScreenPrivacyClick(SplitButton sender, SplitButtonClickEventArgs e) => ToggleManualScreen();
     private void OnResumeAutoClick(object sender, RoutedEventArgs e) => ResumeAutomaticProtection();
     private void OnResumeScreenRequested() => ResumeScreen();
 
@@ -512,16 +599,14 @@ public sealed partial class MainWindow : Window
 
     private void ToggleManualScreen()
     {
-        // The home button says "恢复屏幕" whenever a full-screen overlay is visible.
-        // If the overlay was started by idle protection, honor that action and
-        // clear the automatic state instead of accidentally enabling manual protection.
-        if (_idleScope == AutoProtectionScope.AllDisplays)
+        if (_screenPrivacy.IsActive) { ResumeScreen(); return; }
+        try
         {
-            ResumeScreen();
-            return;
+            CancelRegionEditor();
+            _picker.Cancel();
+            if (!_screenPrivacy.Enable(_settings.ManualScreenTarget)) OnNotice("ScopeDisplayUnavailable");
+            UpdateScreenButtons();
         }
-        if (_manualScreenActive) { _manualScreenActive = false; UpdateFullScreen(animate: true); return; }
-        try { CancelRegionEditor(); _picker.Cancel(); _screenPrivacy.Enable(animate: true); _manualScreenActive = true; UpdateScreenButtons(); }
         catch (Exception ex)
         {
             CurtainDiagnostics.WriteException("ui.command.failed", ex,
@@ -531,19 +616,30 @@ public sealed partial class MainWindow : Window
     }
     private void ResumeScreen()
     {
-        _manualScreenActive = false;
         ResumeAutomaticProtection();
-        UpdateFullScreen(animate: true);
+        if (_screenPrivacy.IsActive) _screenPrivacy.Disable();
+        UpdateScreenButtons();
     }
     private void ActivateIdleProtection(AutoProtectionScope scope)
     {
-        if (_idleScope.HasValue || !_settings.AutoProtection.Enabled) return;
+        if (_idleScope.HasValue || _screenPrivacy.IsActive || !_settings.AutoProtection.Enabled) return;
         if (scope == AutoProtectionScope.AddedWindows && !_manager.HasWindows) return;
         try
         {
             CancelRegionEditor();
-            if (scope == AutoProtectionScope.AllDisplays) _screenPrivacy.Enable(animate: false);
+            if (scope == AutoProtectionScope.AllDisplays)
+            {
+                var target = _settings.AutoProtection.DisplayTarget ?? new();
+                if (!_connectedDisplays.Any(d => target.Includes(d.IsPrimary, d.DeviceId)))
+                {
+                    if (!_idleDisplayUnavailable) OnNotice("ScopeDisplayUnavailable");
+                    _idleDisplayUnavailable = true;
+                    return;
+                }
+                if (!_screenPrivacy.Enable(target, animate: false)) return;
+            }
             else _manager.SetIdleForcedClosed(true, animate: false);
+            _idleDisplayUnavailable = false;
             _idleScope = scope;
             CurtainRuntimeStatus.SetAutoProtection(_settings.AutoProtection.Enabled,
                 _settings.AutoProtection.IdleMinutes, scope.ToString(), active: true);
@@ -563,25 +659,21 @@ public sealed partial class MainWindow : Window
         _idleMonitor.ResetAfterResume();
         string previousScope = _idleScope.Value.ToString();
         if (_idleScope == AutoProtectionScope.AddedWindows) _manager.SetIdleForcedClosed(false, animate: true);
+        else _screenPrivacy.Disable();
         _idleScope = null;
         CurtainRuntimeStatus.SetAutoProtection(_settings.AutoProtection.Enabled,
             _settings.AutoProtection.IdleMinutes, _settings.AutoProtection.Scope.ToString(), active: false);
         CurtainDiagnostics.Write("idle.protection.resumed", stage: "idle-resume", reasonCode: previousScope);
-        UpdateFullScreen(animate: true);
-    }
-    private void UpdateFullScreen(bool animate)
-    {
-        if (_manualScreenActive || _idleScope == AutoProtectionScope.AllDisplays)
-        {
-            try { _screenPrivacy.Enable(animate); }
-            catch (Exception) { _manualScreenActive = false; OnNotice("FullScreenResumeFailed"); }
-        }
-        else _screenPrivacy.Disable(animate);
         UpdateScreenButtons();
     }
     private void UpdateScreenButtons()
     {
-        Localized.SetContent(ScreenPrivacyButton, _screenPrivacy.IsActive ? "RestoreScreenButton" : "ProtectScreenButton");
+        string label = LocalizationService.Get(_screenPrivacy.IsActive ? "RestoreScreenButton" : "ProtectScreenButton");
+        ScreenPrivacyButton.Content = label;
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(ScreenPrivacyButton, label);
+        var option = GetScreenTargets(_settings.ManualScreenTarget).FirstOrDefault(choice =>
+            SameScreenTarget(choice.Target, _settings.ManualScreenTarget));
+        ToolTipService.SetToolTip(ScreenPrivacyButton, _screenPrivacy.IsActive ? label : option?.Label);
         ResumeAutoButton.Visibility = _idleScope.HasValue ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -589,10 +681,12 @@ public sealed partial class MainWindow : Window
     private void OnAutoProtectionScopeChanged(object sender, SelectionChangedEventArgs e) => SaveAutoProtectionFromControls();
     private void SaveAutoProtectionFromControls()
     {
-        if (_loadingSettings || IdleMinutesCombo.SelectedValue is null) return;
+        if (_loadingSettings || IdleMinutesCombo.SelectedValue is null ||
+            IdleScopeCombo.SelectedItem is not ComboBoxItem { Tag: ScreenTargetOption option }) return;
         int minutes = int.TryParse(IdleMinutesCombo.SelectedValue.ToString(), out var value) ? value : 3;
         var auto = new AutoProtectionSettings(IdleProtectSwitch.IsOn, minutes,
-            IdleScopeCombo.SelectedIndex == 1 ? AutoProtectionScope.AllDisplays : AutoProtectionScope.AddedWindows);
+            option.Target is null ? AutoProtectionScope.AddedWindows : AutoProtectionScope.AllDisplays,
+            option.Target);
         var old = _settings;
         _settings = _settings with { AutoProtection = auto };
         string operationId = CurtainDiagnostics.NewOperationId();
@@ -608,7 +702,10 @@ public sealed partial class MainWindow : Window
             CurtainDiagnostics.Write("settings.preference.changed", operationId: operationId,
                 stage: "AutoProtection.Scope", reasonCode: auto.Scope.ToString());
         CurtainRuntimeStatus.SetAutoProtection(auto.Enabled, auto.IdleMinutes, auto.Scope.ToString(), _idleScope.HasValue);
-        if (!auto.Enabled || (_idleScope.HasValue && _idleScope.Value != auto.Scope)) ResumeAutomaticProtection();
+        _idleDisplayUnavailable = false;
+        if (!auto.Enabled || (_idleScope.HasValue && (_idleScope.Value != auto.Scope ||
+            !SameScreenTarget(old.AutoProtection.DisplayTarget ?? new(), auto.DisplayTarget ?? new()))))
+            ResumeAutomaticProtection();
         UpdateAutoProtectionEnabledControls();
     }
     private void ApplyAutoProtectionControls()
@@ -618,7 +715,7 @@ public sealed partial class MainWindow : Window
         IdleProtectSwitch.IsOn = _settings.AutoProtection.Enabled;
         IdleMinutesCombo.SelectedItem = IdleMinutesCombo.Items.OfType<ComboBoxItem>().FirstOrDefault(i =>
             int.TryParse(i.Tag?.ToString(), out int v) && v == _settings.AutoProtection.IdleMinutes);
-        IdleScopeCombo.SelectedIndex = _settings.AutoProtection.Scope == AutoProtectionScope.AllDisplays ? 1 : 0;
+        UpdateLocalizedScopeItems();
         _loadingSettings = wasLoading;
         UpdateAutoProtectionEnabledControls();
     }

@@ -50,7 +50,7 @@ internal sealed partial class CurtainWindow
     }
 
     private void ConfigureLiveAreaMask(LiveAreaMask mask, ClearArea area, PixelRect preview,
-        PixelRect bounds, float scale, PixelRect[] staticHoles, PixelRect? popup)
+        PixelRect bounds, float scale, PixelRect[] staticHoles)
     {
         mask.Dispose();
         mask.Base = MakeRegion(bounds);
@@ -66,18 +66,10 @@ internal sealed partial class CurtainWindow
             if (pixels.IsValid) CombineRegionRectangle(mask.Moving, pixels, RegionUnion);
         }
 
-        // An independently blurred area or a protected popup still wins in an overlap.
+        // An independently blurred area still wins in an overlap.
         var protectedTiles = _clearRegions.Where(item => !item.IsClear)
             .SelectMany(item => item.VisibleTiles(bounds.Width, bounds.Height, scale));
-        foreach (var tile in protectedTiles) Protect(tile);
-        if (popup is { } cover)
-        {
-            var visible = new PixelRect(Math.Max(bounds.Left, cover.Left), Math.Max(bounds.Top, cover.Top),
-                Math.Min(bounds.Right, cover.Right), Math.Min(bounds.Bottom, cover.Bottom));
-            if (visible.IsValid) Protect(visible);
-        }
-
-        void Protect(PixelRect tile)
+        foreach (var tile in protectedTiles)
         {
             if (mask.Protected == 0) mask.Protected = MakeRegion(default);
             CombineRegionRectangle(mask.Protected, tile, RegionUnion);

@@ -3,7 +3,8 @@ using System.Runtime.InteropServices;
 
 namespace Curtain.App.Interop;
 
-internal readonly record struct ScreenRect(nint Monitor, int Left, int Top, int Width, int Height);
+internal readonly record struct ScreenRect(nint Monitor, int Left, int Top, int Width, int Height,
+    bool IsPrimary = false, string? DeviceId = null, string? DeviceName = null, int Number = 0);
 
 /// <summary>Session-local idle input and physical multi-monitor bounds.</summary>
 internal static class PrivacyNative
@@ -16,12 +17,22 @@ internal static class PrivacyNative
         public uint Size;
         public uint Tick;
     }
-    [StructLayout(LayoutKind.Sequential)] private struct MonitorInfo
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] private struct MonitorInfo
     {
         public uint Size;
         public NativeMethods.Rect Monitor;
         public NativeMethods.Rect Work;
         public uint Flags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string Device;
+    }
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] private struct DisplayDevice
+    {
+        public int Size;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string Name;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string Description;
+        public uint Flags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string Id;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string Key;
     }
     private delegate bool MonitorProc(nint monitor, nint hdc, nint rect, nint data);
     [DllImport("user32.dll", SetLastError = true)]
@@ -30,6 +41,8 @@ internal static class PrivacyNative
     private static extern bool EnumDisplayMonitors(nint hdc, nint clipRect, MonitorProc callback, nint data);
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool GetMonitorInfoW(nint monitor, ref MonitorInfo info);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    private static extern bool EnumDisplayDevicesW(string device, uint index, ref DisplayDevice info, uint flags);
 
     internal static TimeSpan? GetIdleDuration()
     {
@@ -51,7 +64,24 @@ internal static class PrivacyNative
                 int width = info.Monitor.Right - info.Monitor.Left;
                 int height = info.Monitor.Bottom - info.Monitor.Top;
                 if (width > 0 && height > 0)
-                    found.Add(new ScreenRect(monitor, info.Monitor.Left, info.Monitor.Top, width, height));
+                {
+                    var device = new DisplayDevice { Size = Marshal.SizeOf<DisplayDevice>() };
+                    string? id = null, name = null;
+                    // A cloned desktop can map several physical panels to one HMONITOR.
+                    // Store the interface identity only for an individually addressable display.
+                    int active = 0;
+                    for (uint index = 0; EnumDisplayDevicesW(info.Device, index, ref device, 1); index++)
+                    {
+                        if ((device.Flags & 1) == 0) continue;
+                        active++;
+                        id = device.Id;
+                        name = device.Description;
+                    }
+                    int marker = info.Device.LastIndexOf("DISPLAY", StringComparison.Ordinal);
+                    int number = marker >= 0 && int.TryParse(info.Device.AsSpan(marker + 7), out int value) ? value : 0;
+                    found.Add(new ScreenRect(monitor, info.Monitor.Left, info.Monitor.Top, width, height,
+                        (info.Flags & 1) != 0, active == 1 && !string.IsNullOrWhiteSpace(id) ? id : null, name, number));
+                }
             }
             return true;
         };

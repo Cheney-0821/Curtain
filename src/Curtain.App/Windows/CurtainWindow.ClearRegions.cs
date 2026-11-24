@@ -30,7 +30,7 @@ internal sealed partial class CurtainWindow
     private bool _clearRegionsAllowed;
     private bool _hasWindowRegion;
     private PixelRect? _coveredPopup;
-    private (Vector2 Size, float Scale, PixelRect? CoveredPopup, bool UseAreas)? _regionLayout;
+    private (Vector2 Size, float Scale, bool UseAreas)? _regionLayout;
 
     internal bool IsEditingClearRegions => _regionDraft is not null;
     private float RegionScale => Math.Max(96, NativeMethods.GetDpiForWindow(Handle)) / 96f;
@@ -47,7 +47,7 @@ internal sealed partial class CurtainWindow
     private void UpdateClearRegionSurface()
     {
         UpdateOutlineLayout();
-        var layout = (Size: _visual.Size, Scale: RegionScale, CoveredPopup: _coveredPopup,
+        var layout = (Size: _visual.Size, Scale: RegionScale,
             UseAreas: _clearRegionsAllowed && !IsEditingClearRegions);
         if (_regionLayout == layout) return;
         int width = (int)layout.Size.X, height = (int)layout.Size.Y;
@@ -57,9 +57,9 @@ internal sealed partial class CurtainWindow
             ? active : null;
         var holes = layout.UseAreas
             ? _clearRegions.Where(area => area.IsClear && area != transitioning && area != drag?.Area)
-                .SelectMany(area => area.VisibleTiles(width, height, layout.Scale, layout.CoveredPopup)).ToArray()
+                .SelectMany(area => area.VisibleTiles(width, height, layout.Scale)).ToArray()
             : [];
-        var animated = transitioning?.VisibleTiles(width, height, layout.Scale, layout.CoveredPopup).ToArray() ?? [];
+        var animated = transitioning?.VisibleTiles(width, height, layout.Scale).ToArray() ?? [];
 
         var bounds = new PixelRect(0, 0, width, height);
         UpdateAreaBlurClips(bounds, holes, animated);
@@ -68,7 +68,7 @@ internal sealed partial class CurtainWindow
         {
             if (drag is { LiveMask: { } mask, Preview: { } preview })
             {
-                ConfigureLiveAreaMask(mask, drag.Area, preview, bounds, layout.Scale, holes, layout.CoveredPopup);
+                ConfigureLiveAreaMask(mask, drag.Area, preview, bounds, layout.Scale, holes);
                 if (mask.Ready)
                 {
                     ApplyLiveAreaPosition(drag);
@@ -76,7 +76,7 @@ internal sealed partial class CurtainWindow
                 }
 
                 // Hold the original native cutout until the compositor drops its old clip.
-                holes = [.. holes, .. drag.Area.VisibleTiles(width, height, layout.Scale, layout.CoveredPopup)];
+                holes = [.. holes, .. drag.Area.VisibleTiles(width, height, layout.Scale)];
             }
             ApplyStaticWindowRegion(bounds, holes);
         }

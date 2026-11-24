@@ -31,7 +31,11 @@
                                     </curtain:ScrollAwareSettingsExpander.Header>
                                     <StackPanel Orientation="Horizontal" Spacing="8">
                                         <Button x:Name="PickButton" Click="OnPickClick" />
-                                        <Button x:Name="ScreenPrivacyButton" Click="OnScreenPrivacyClick" />
+                                        <SplitButton x:Name="ScreenPrivacyButton" Click="OnScreenPrivacyClick">
+                                            <SplitButton.Flyout>
+                                                <MenuFlyout x:Name="ScreenPrivacyScopes" Opening="OnScreenPrivacyScopesOpening" />
+                                            </SplitButton.Flyout>
+                                        </SplitButton>
                                         <Button x:Name="ResumeAutoButton" Click="OnResumeAutoClick" Visibility="Collapsed" />
                                     </StackPanel>
                                     <curtain:ScrollAwareSettingsExpander.Description>
@@ -135,7 +139,7 @@
                                                 <controls:SettingsCard.Header>
                                                     <TextBlock x:Name="AutoProtectionScopeLabelText" TextWrapping="Wrap" VerticalAlignment="Center" />
                                                 </controls:SettingsCard.Header>
-                                                <ComboBox x:Name="IdleScopeCombo" HorizontalAlignment="Right" SelectedIndex="0" SelectionChanged="OnAutoProtectionScopeChanged" Width="220" />
+                                                <ComboBox x:Name="IdleScopeCombo" HorizontalAlignment="Right" SelectionChanged="OnAutoProtectionScopeChanged" Width="220" />
                                                 <controls:SettingsCard.Description>
                                                     <TextBlock x:Name="IdleScopeHintText" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap" />
                                                 </controls:SettingsCard.Description>

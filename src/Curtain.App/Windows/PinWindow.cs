@@ -14,6 +14,7 @@ internal sealed class PinWindow
 {
     private const string ClassName = "Curtain.A03.Handle";
     private const uint WM_TIMER = 0x0113, AnimationTimer = 1;
+    private const double InwardSlideMs = 210;
     private static readonly HandleNative.WindowProc Procedure = OnMessage;
     private static readonly Dictionary<nint, PinWindow> Windows = new();
     private static bool _registered;
@@ -27,7 +28,12 @@ internal sealed class PinWindow
     private double _hoverAmount, _pressAmount;
     private double _hoverStartValue, _pressStartValue;
     private long _hoverStartTicks, _pressStartTicks;
+    private bool _inwardRevealed;
+    private double _inwardAmount, _inwardStartValue;
+    private long _inwardStartTicks;
     private bool _timerRunning;
+    private nint _paintDc, _bitmap, _previousBitmap, _bits;
+    private int[] _pixels = [];
 
     public nint Handle { get; }
     internal bool IsVisible => NativeMethods.IsWindowVisible(Handle);
@@ -39,6 +45,13 @@ internal sealed class PinWindow
 
     internal bool AreaDragging { get; set; }
     internal void ReleaseAreaPress() => BeginPress(false);
+    private bool HasWideHitTarget => !_areaControl && !_inside;
+
+    private void ResetPointer()
+    {
+        BeginPress(false);
+        BeginHover(false);
+    }
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern nint SetTimer(nint hwnd, nint idEvent, uint interval, nint callback);
@@ -78,6 +91,30 @@ internal sealed class PinWindow
         if (_width > 0) Render();
     }
 
+    internal void SetInwardReveal(bool reveal, bool animate)
+    {
+        if (animate && _inwardRevealed == reveal) return;
+        TickAnimation(false);
+        _inwardRevealed = reveal;
+        double goal = reveal ? 1 : 0;
+        if (animate && _inwardAmount != goal)
+        {
+            _inwardStartValue = _inwardAmount;
+            _inwardStartTicks = Stopwatch.GetTimestamp();
+            StartTimer();
+        }
+        else
+        {
+            _inwardStartTicks = 0;
+            _inwardAmount = goal;
+            if (reveal) Render();
+        }
+        if (reveal && !IsVisible)
+            NativeMethods.ShowWindow(Handle, NativeMethods.SW_SHOWNOACTIVATE);
+        else if (!reveal && _inwardStartTicks == 0 && IsVisible)
+            NativeMethods.ShowWindow(Handle, NativeMethods.SW_HIDE);
+    }
+
     internal bool ContainsPoint(NativeMethods.Point point)
     {
         if (!NativeMethods.GetWindowRect(Handle, out var bounds)) return false;
@@ -98,6 +135,7 @@ internal sealed class PinWindow
     {
         var b = placement.Bounds;
         if ((_width, _height, _dpi, _inside) == (b.Width, b.Height, dpi, placement.IsInside)) return;
+        if ((_width, _height) != (b.Width, b.Height)) ReleaseSurface();
         (_width, _height, _dpi, _inside) = (b.Width, b.Height, dpi, placement.IsInside);
         Render();
     }
@@ -138,12 +176,14 @@ internal sealed class PinWindow
     {
         if (!_timerRunning)
         {
-            _timerRunning = SetTimer(Handle, (nint)AnimationTimer, 16, 0) != 0;
+            _timerRunning = SetTimer(Handle, (nint)AnimationTimer, _inside ? 10u : 16u, 0) != 0;
             // Timer creation failure must not break the handle: settle immediately.
             if (!_timerRunning)
             {
                 _hoverAmount = _hovered ? 1 : 0;
                 _pressAmount = _pressed ? 1 : 0;
+                _inwardAmount = _inwardRevealed ? 1 : 0;
+                _inwardStartTicks = 0;
             }
         }
         Render();
@@ -155,15 +195,27 @@ internal sealed class PinWindow
             _hoverAmount = Transition(_hoverStartValue, _hovered ? 1 : 0, _hoverStartTicks, 170);
         if (_pressStartTicks != 0)
             _pressAmount = Transition(_pressStartValue, _pressed ? 1 : 0, _pressStartTicks, 105);
+        bool sliding = _inwardStartTicks != 0;
+        if (sliding)
+        {
+            _inwardAmount = Transition(_inwardStartValue, _inwardRevealed ? 1 : 0, _inwardStartTicks, InwardSlideMs);
+            if (Stopwatch.GetElapsedTime(_inwardStartTicks).TotalMilliseconds >= InwardSlideMs)
+            {
+                _inwardAmount = _inwardRevealed ? 1 : 0;
+                if (paint) _inwardStartTicks = 0;
+            }
+        }
 
         bool hoverFinished = _hoverStartTicks == 0 || Stopwatch.GetElapsedTime(_hoverStartTicks).TotalMilliseconds >= 170;
         bool pressFinished = _pressStartTicks == 0 || Stopwatch.GetElapsedTime(_pressStartTicks).TotalMilliseconds >= 105;
-        if (_timerRunning && hoverFinished && pressFinished)
+        if (_timerRunning && hoverFinished && pressFinished && _inwardStartTicks == 0)
         {
             KillTimer(Handle, (nint)AnimationTimer);
             _timerRunning = false;
         }
         if (paint) Render();
+        if (paint && sliding && _inwardStartTicks == 0 && !_inwardRevealed && _inside && IsVisible)
+            NativeMethods.ShowWindow(Handle, NativeMethods.SW_HIDE);
     }
 
     private (double Width, double Height, double Y) CapsuleDimensions()
@@ -172,8 +224,10 @@ internal sealed class PinWindow
         double barWidth = Math.Max(1, Math.Min((_fullScreen ? 104 + 12 * _hoverAmount - 6 * _pressAmount : 60 + 8 * _hoverAmount - 5 * _pressAmount) * scale, _width - 4 * scale));
         double barHeight = Math.Max(1, Math.Min((_fullScreen ? 18 + 2 * _hoverAmount - _pressAmount : 8 + 2 * _hoverAmount - 1.5 * _pressAmount) * scale, _height - 2 * scale));
         double radius = barHeight / 2;
-        double centerY = _fullScreen ? _height / 2.0 : _inside ? Math.Min(_height / 2.0, 4 * scale + radius)
-            : Math.Max(_height / 2.0, _height - 4 * scale - radius);
+        double gap = PinPlacement.WindowPinGap * scale;
+        double centerY = _fullScreen ? _height / 2.0 : _inside ? Math.Min(_height - radius, Math.Round(gap) + gap + radius)
+            : Math.Max(_height / 2.0, _height - gap - radius);
+        if (_inside) centerY -= (1 - _inwardAmount) * (centerY + radius + 1);
         return (barWidth, barHeight, centerY);
     }
 
@@ -183,48 +237,54 @@ internal sealed class PinWindow
         double scale = _dpi / 96.0;
         var (barWidth, barHeight, centerY) = CapsuleDimensions();
         double radius = barHeight / 2;
-        var pixels = new int[_width * _height];
-        // Keep the wider existing click target, while its host stays visually invisible.
-        if (!_areaControl) Array.Fill(pixels, 1 << 24);
+        EnsureSurface();
+        // An inward control sits above the target's own UI. Only its capsule can receive input.
+        int minimumAlpha = HasWideHitTarget ? 1 : 0;
         double opacity = Math.Clamp((_closed ? 240 : 210) + 15 * _hoverAmount - 24 * _pressAmount, 0, 255) * _opacityScale;
         for (int y = 0; y < _height; y++)
         for (int x = 0; x < _width; x++)
         {
             double dx = Math.Max(0, Math.Abs(x + .5 - _width / 2.0) - (barWidth / 2 - radius));
             double dy = y + .5 - centerY;
-            double coverage = Math.Clamp(radius + .5 - Math.Sqrt(dx * dx + dy * dy), 0, 1);
-            int alpha = Math.Max(_areaControl ? 0 : 1, (int)Math.Round(coverage * opacity));
-            double inner = Math.Clamp(radius - 1 * scale + .5 - Math.Sqrt(dx * dx + dy * dy), 0, 1);
+            double distance = Math.Sqrt(dx * dx + dy * dy);
+            double coverage = Math.Clamp(radius + .5 - distance, 0, 1);
+            int alpha = Math.Max(minimumAlpha, (int)Math.Round(coverage * opacity));
+            double inner = Math.Clamp(radius - scale + .5 - distance, 0, 1);
             int shade = (int)Math.Round(70 + 185 * inner);
             int premultiplied = shade * alpha / 255;
-            pixels[y * _width + x] = (alpha << 24) | (premultiplied << 16) | (premultiplied << 8) | premultiplied;
+            _pixels[y * _width + x] = (alpha << 24) | (premultiplied << 16) | (premultiplied << 8) | premultiplied;
         }
-        nint screen = HandleNative.GetDC(0), memory = HandleNative.CreateCompatibleDC(screen);
+        Marshal.Copy(_pixels, 0, _bits, _pixels.Length);
+        var size = new HandleNative.Size { Width = _width, Height = _height };
+        var point = new NativeMethods.Point();
+        var blend = new HandleNative.Blend { Alpha = 255, Format = 1 };
+        if (!HandleNative.UpdateLayeredWindow(Handle, 0, 0, ref size, _paintDc,
+            ref point, 0, ref blend, 2)) throw new Win32Exception(Marshal.GetLastPInvokeError());
+    }
+
+    private void EnsureSurface()
+    {
+        if (_bitmap != 0) return;
+        _pixels = new int[_width * _height];
+        _paintDc = HandleNative.CreateCompatibleDC(0);
+        if (_paintDc == 0) throw new Win32Exception(Marshal.GetLastPInvokeError());
         var info = new HandleNative.BitmapInfo { HeaderSize = 40, Width = _width,
             Height = -_height, Planes = 1, Bits = 32 };
-        nint bitmap = HandleNative.CreateDIBSection(screen, ref info, 0, out var bits, 0, 0);
-        if (bitmap == 0 || memory == 0)
-        {
-            if (bitmap != 0) HandleNative.DeleteObject(bitmap);
-            if (memory != 0) HandleNative.DeleteDC(memory);
-            HandleNative.ReleaseDC(0, screen);
-            throw new Win32Exception(Marshal.GetLastPInvokeError());
-        }
-        nint old = HandleNative.SelectObject(memory, bitmap);
-        try
-        {
-            Marshal.Copy(pixels, 0, bits, pixels.Length);
-            var size = new HandleNative.Size { Width = _width, Height = _height };
-            var point = new NativeMethods.Point();
-            var blend = new HandleNative.Blend { Alpha = 255, Format = 1 };
-            if (!HandleNative.UpdateLayeredWindow(Handle, screen, 0, ref size, memory,
-                ref point, 0, ref blend, 2)) throw new Win32Exception(Marshal.GetLastPInvokeError());
-        }
-        finally
-        {
-            HandleNative.SelectObject(memory, old); HandleNative.DeleteObject(bitmap);
-            HandleNative.DeleteDC(memory); HandleNative.ReleaseDC(0, screen);
-        }
+        _bitmap = HandleNative.CreateDIBSection(_paintDc, ref info, 0, out _bits, 0, 0);
+        if (_bitmap != 0) _previousBitmap = HandleNative.SelectObject(_paintDc, _bitmap);
+        if (_previousBitmap != 0 && _previousBitmap != -1) return;
+        var error = new Win32Exception(Marshal.GetLastPInvokeError());
+        ReleaseSurface();
+        throw error;
+    }
+
+    private void ReleaseSurface()
+    {
+        if (_previousBitmap != 0 && _previousBitmap != -1) HandleNative.SelectObject(_paintDc, _previousBitmap);
+        if (_bitmap != 0) HandleNative.DeleteObject(_bitmap);
+        if (_paintDc != 0) HandleNative.DeleteDC(_paintDc);
+        _paintDc = _bitmap = _previousBitmap = _bits = 0;
+        _pixels = [];
     }
 
     private static nint OnMessage(nint hwnd, uint message, nint wParam, nint lParam)
@@ -233,13 +293,15 @@ internal sealed class PinWindow
         {
             try
             {
+                if (message == 0x18 && wParam == 0 && !window._fullScreen && !window._areaControl)
+                    window.ResetPointer();
                 if (message == 0x21) return 3; // MA_NOACTIVATE
                 if (message == 0x20 && window.AreaDragging)
                 {
                     ClearAreaResizeWindow.UseCursor(AreaResizeEdge.None);
                     return 1;
                 }
-                if (message == 0x84 && (window._fullScreen || window._areaControl) &&
+                if (message == 0x84 && (window._fullScreen || !window.HasWideHitTarget) &&
                     NativeMethods.GetCursorPos(out var hitPoint) && !window.ContainsPoint(hitPoint))
                     return -1; // HTTRANSPARENT outside the visible capsule.
                 if (message == 0x200 && !window._hovered)
@@ -283,6 +345,7 @@ internal sealed class PinWindow
                 {
                     if (window._timerRunning) KillTimer(hwnd, (nint)AnimationTimer);
                     window._timerRunning = false;
+                    window.ReleaseSurface();
                     Windows.Remove(hwnd);
                 }
             }
@@ -296,6 +359,7 @@ internal sealed class PinWindow
         if (_timerRunning) KillTimer(Handle, (nint)AnimationTimer);
         _timerRunning = false;
         HandleNative.DestroyWindow(Handle);
+        ReleaseSurface();
         Windows.Remove(Handle);
     }
 }

@@ -11,11 +11,15 @@ namespace Curtain.App.Services;
 
 internal sealed class CurtainSession : IDisposable
 {
+    private const int PinIntroMs = 1500, PinLeaveDelayMs = 1000;
     private CurtainWindow? _curtain;
     private PinWindow? _pin;
     private WindowHooks? _hooks;
     private DragGesture? _drag;
     private (DockedPin Placement, PixelRect Target, int Dpi)? _lastPlacement;
+    private readonly DispatcherQueueTimer _pinHoverTimer;
+    private PixelRect _pinRevealBounds;
+    private long _pinKeepVisibleUntil;
     private readonly string? _popupClass;
     private readonly bool _allowUnownedPopup;
     private nint _coveredPopup;
@@ -65,6 +69,9 @@ internal sealed class CurtainSession : IDisposable
         _manualClosed = initiallyClosed;
         Target.SetClosed(initiallyClosed);
         Item = new(this, Localization.LocalizationService.Get("ProtectedApplication"));
+        _pinHoverTimer = dispatcher.CreateTimer();
+        _pinHoverTimer.Interval = TimeSpan.FromMilliseconds(32);
+        _pinHoverTimer.Tick += OnPinHover;
         string stage = "process-open";
         CurtainDiagnostics.Write("session.create.started", operationId: _operationId,
             stage: stage, reasonCode: initiallyClosed ? "InitiallyClosed" : "InitiallyOpen",
@@ -118,7 +125,7 @@ internal sealed class CurtainSession : IDisposable
             _hooks = new WindowHooks(dispatcher, Handle, target.Identity.ThreadId, _popupClass, RefreshSafely);
             if (!IsCurrent()) throw new InvalidOperationException("目标已经关闭。");
             stage = "initial-refresh";
-            Refresh(animateVisibilityChange: true);
+            Refresh(animateVisibilityChange: true, showPinOnAttach: initiallyClosed);
             if (IsDestroyed) throw new InvalidOperationException("目标已经关闭。");
             CurtainDiagnostics.Write("session.create.completed", operationId: _operationId,
                 stage: "initial-refresh", reasonCode: "Success", hwnd: target.Identity.Handle,
@@ -278,7 +285,8 @@ internal sealed class CurtainSession : IDisposable
             Ended?.Invoke(this, "OverlayErrorWindowRemoved");
         }
     }
-    private void Refresh(bool animateVisibilityChange = false, bool forceVisibilityUpdate = false)
+    private void Refresh(bool animateVisibilityChange = false, bool forceVisibilityUpdate = false,
+        bool showPinOnAttach = false)
     {
         if (_curtain is null || _pin is null) return;
         if (IsDestroyed || !IsCurrent())
@@ -295,7 +303,8 @@ internal sealed class CurtainSession : IDisposable
             _coveredPopup = 0;
             CancelGesture();
             CancelClearRegionEdit();
-            NativeMethods.ShowWindow(_pin.Handle, NativeMethods.SW_HIDE);
+            _pinHoverTimer.Stop();
+            SetPinVisibility(false, default);
             _curtain.CancelAndHide();
             _lastAppliedProtectionState = null;
             return;
@@ -304,10 +313,11 @@ internal sealed class CurtainSession : IDisposable
             (NativeMethods.GetAsyncKeyState(0x1B) & 0x8000) != 0 || NativeMethods.IsZoomed(Handle))) CancelGesture();
         int dpi = Math.Max(96, (int)NativeMethods.GetDpiForWindow(Handle));
         var monitor = NativeMethods.GetMonitorBounds(Handle, bounds.Value);
-        var placement = PinPlacement.Calculate(bounds.Value, monitor.Work, monitor.Monitor, dpi, NativeMethods.IsZoomed(Handle));
+        var placement = GetPinPlacement(bounds.Value, monitor.Work, monitor.Monitor, dpi, NativeMethods.IsZoomed(Handle));
         var current = (placement, bounds.Value, dpi);
         if (_lastPlacement != current)
         {
+            if (placement.IsInside) SetPinVisibility(false, default);
             _lastPlacement = current;
             CurtainDiagnostics.Write("overlay.geometry.changed", operationId: _operationId,
                 stage: "window-overlay-geometry", reasonCode: "PositionRecalculated",
@@ -325,14 +335,14 @@ internal sealed class CurtainSession : IDisposable
         }
         if (_lastClosed != Target.IsClosed) { _lastClosed = Target.IsClosed; _pin.UpdateState(Target.IsClosed); }
         _pin.UpdatePlacement(placement, dpi);
-        _curtain.SetPrimaryPinBounds(placement.Bounds);
         if (_curtain.IsEditingClearRegions)
         {
             NativeMethods.SetWindowPos(_curtain.Handle, 0, bounds.Value.Left, bounds.Value.Top,
                 bounds.Value.Width, bounds.Value.Height, NativeMethods.SWP_NOZORDER | NativeMethods.SWP_NOACTIVATE);
             _curtain.SetTargetMaximized(NativeMethods.IsZoomed(Handle));
             _curtain.UpdateRegionEditorTarget(bounds.Value, dpi);
-            NativeMethods.ShowWindow(_pin.Handle, NativeMethods.SW_HIDE);
+            _pinHoverTimer.Stop();
+            SetPinVisibility(false, default);
             return;
         }
         var protection = _idleForcedClosed ? new WindowProtectionSettings() : EffectiveProtection;
@@ -342,7 +352,8 @@ internal sealed class CurtainSession : IDisposable
             : null;
         _coveredPopup = popup?.Handle ?? 0;
         bool aboveNormalWindows = false;
-        if (Target.IsClosed && _popupClass is not null && protection.AllowClickThrough)
+        // A local clear region can open the popup even when global click-through is off.
+        if (Target.IsClosed && _popupClass is not null)
         {
             nint foreground = NativeMethods.GetForegroundWindow();
             if (foreground == Handle || foreground == popup?.Handle)
@@ -364,18 +375,76 @@ internal sealed class CurtainSession : IDisposable
             : null);
         _curtain.ConfigureWorkingProtection(protection);
         if (aboveNormalWindows)
-            NativeMethods.PositionGeometry(_pin.Handle, placement.Bounds, showWindow: true);
+            NativeMethods.PositionGeometry(_pin.Handle, placement.Bounds, showWindow: !placement.IsInside);
         else
         {
             nint pinAnchor = Target.IsClosed || _curtain.IsVisible ? _curtain.Handle : Handle;
-            NativeMethods.PositionAbove(_pin.Handle, pinAnchor, placement.Bounds);
+            NativeMethods.PositionAbove(_pin.Handle, pinAnchor, placement.Bounds, showWindow: !placement.IsInside);
         }
+        _pinRevealBounds = PinPlacement.RevealBounds(placement, bounds.Value,
+            placement.IsFullScreen ? monitor.Monitor : monitor.Work, dpi);
+        if (_pinRevealBounds.IsValid)
+        {
+            if (showPinOnAttach)
+            {
+                _pinKeepVisibleUntil = Environment.TickCount64 + PinIntroMs;
+                SetPinVisibility(true, placement.Bounds, animate: true);
+            }
+            if (!_pinHoverTimer.IsRunning) _pinHoverTimer.Start();
+        }
+        else _pinHoverTimer.Stop();
+        _curtain.SetPrimaryPinBounds(_pin.IsVisible ? placement.Bounds : default);
         if (forceVisibilityUpdate || _lastAppliedProtectionState != Target.IsClosed)
         {
             _curtain.SetProtectedVisible(Target.IsClosed, animateVisibilityChange);
             _lastAppliedProtectionState = Target.IsClosed;
         }
     }
+
+    private DockedPin GetPinPlacement(PixelRect target, PixelRect work, PixelRect monitor, int dpi, bool maximized)
+    {
+        var placement = PinPlacement.Calculate(target, work, monitor, dpi, maximized);
+        return !placement.IsInside && NativeMethods.HasSnappedWindowAbove(Handle, target, placement.Bounds, dpi)
+            ? PinPlacement.Calculate(target, work, monitor, dpi, maximized, outsideOccupied: true)
+            : placement;
+    }
+
+    private void OnPinHover(DispatcherQueueTimer sender, object args)
+    {
+        // Keep the menu's owner visible as the pointer moves into the menu.
+        if (_disposed || _drag is not null || _curtain?.IsProtectionMenuOpen == true ||
+            _pin is not { } pin || _lastPlacement is not { } layout) return;
+        long now = Environment.TickCount64;
+        if (NativeMethods.GetCursorPos(out var cursor))
+        {
+            var point = new PixelPoint(cursor.X, cursor.Y);
+            if (ClearArea.Contains(_pinRevealBounds, point) ||
+                (pin.IsVisible && ClearArea.Contains(layout.Placement.Bounds, point)))
+            {
+                nint hit = NativeMethods.WindowFromPoint(cursor);
+                nint root = hit == 0 ? 0 : NativeMethods.GetAncestor(hit, NativeMethods.GA_ROOT);
+                if (root == Handle || OwnsOverlay(root))
+                    _pinKeepVisibleUntil = Math.Max(_pinKeepVisibleUntil, now + PinLeaveDelayMs);
+            }
+        }
+        try { SetPinVisibility(now < _pinKeepVisibleUntil, layout.Placement.Bounds, animate: true); }
+        catch (Exception ex)
+        {
+            _pinHoverTimer.Stop();
+            SetPinVisibility(false, default);
+            CurtainDiagnostics.WriteException("overlay.pin.reveal-failed", ex, operationId: _operationId,
+                stage: "pin-reveal", sessionId: SessionId, ruleId: _ruleId);
+        }
+    }
+
+    private void SetPinVisibility(bool show, PixelRect bounds, bool animate = false)
+    {
+        if (_pin is not { } pin) return;
+        if (!animate && !show) _pinKeepVisibleUntil = 0;
+        pin.SetInwardReveal(show, animate);
+        _curtain?.SetPrimaryPinBounds(pin.IsVisible ? bounds : default);
+    }
+
     private void OnPressed(PixelPoint point)
     {
         if (_disposed || !Target.IsClosed || !IsCurrent() ||
@@ -412,10 +481,11 @@ internal sealed class CurtainSession : IDisposable
         next = DragGesture.KeepReachable(next, work,
             (int)Math.Round(64 * dpi / 96.0), (int)Math.Round(32 * dpi / 96.0));
         var nextVisible = DragGesture.TranslateVisibleBounds(raw.ToPixelRect(), visible, next);
-        var placement = PinPlacement.Calculate(nextVisible, work, monitor.Monitor, dpi, false);
+        var placement = GetPinPlacement(nextVisible, work, monitor.Monitor, dpi, false);
+        if (placement.IsInside) SetPinVisibility(false, default);
         _pin.UpdatePlacement(placement, dpi);
         bool moved = NativeMethods.MoveProtectedWindows(Handle, next, _curtain.Handle,
-            nextVisible, _pin.Handle, placement.Bounds);
+            nextVisible, _pin.Handle, placement.Bounds, showPin: !placement.IsInside);
         if (!moved)
         {
             CurtainDiagnostics.Write("overlay.drag.failed", CurtainDiagnosticLevel.Warning,
@@ -437,6 +507,8 @@ internal sealed class CurtainSession : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        _pinHoverTimer.Stop();
+        _pinHoverTimer.Tick -= OnPinHover;
         var failures = new List<Exception>();
         void Release(string stage, Action cleanup)
         {

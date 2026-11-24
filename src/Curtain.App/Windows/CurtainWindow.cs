@@ -383,6 +383,7 @@ internal sealed partial class CurtainWindow
     }
     private bool CanOpenProtectionMenu => !_disposed && _clearRegionsAllowed && _desiredVisible &&
         IsVisible && !IsEditingClearRegions && !_settings.AllowClickThrough;
+    internal bool IsProtectionMenuOpen => _protectionMenu is not null;
 
     internal void ShowProtectionMenu(nint pinHandle, PixelPoint point, Action draw,
         Action<WindowProtectionSettings> configure, Action remove)

@@ -130,37 +130,21 @@ public sealed class ClearArea
             .ThenBy(tile => Math.Abs((tile.Left + tile.Right) / 2 - center)).First();
         int width = Math.Clamp((int)MathF.Round(PinPlacement.WindowPinWidth * scale), 1, viewport.Width);
         int height = Math.Clamp((int)MathF.Round(PinPlacement.WindowPinHeight * scale), 1, viewport.Height);
+        int gap = Math.Max(1, (int)MathF.Round(PinPlacement.WindowPinGap * scale));
         int left = Math.Clamp((top.Left + top.Right - width) / 2, 0, viewport.Width - width);
-        int y = Math.Clamp(top.Top - height, 0, viewport.Height - height);
+        int y = Math.Clamp(top.Top - gap - height, 0, viewport.Height - height);
         return new(viewport.Left + left, viewport.Top + y,
             viewport.Left + left + width, viewport.Top + y + height);
     }
 
-    public IEnumerable<PixelRect> VisibleTiles(int width, int height, float scale, PixelRect? popup = null)
+    public IEnumerable<PixelRect> VisibleTiles(int width, int height, float scale)
     {
         foreach (var tile in Tiles)
         {
             var pixels = ScaleTile(tile, scale);
             var clipped = new PixelRect(Math.Max(0, pixels.Left), Math.Max(0, pixels.Top),
                 Math.Min(width, pixels.Right), Math.Min(height, pixels.Bottom));
-            if (!clipped.IsValid) continue;
-            if (popup is not { } cover)
-            {
-                yield return clipped;
-                continue;
-            }
-
-            int left = Math.Max(clipped.Left, cover.Left), top = Math.Max(clipped.Top, cover.Top);
-            int right = Math.Min(clipped.Right, cover.Right), bottom = Math.Min(clipped.Bottom, cover.Bottom);
-            if (left >= right || top >= bottom)
-            {
-                yield return clipped;
-                continue;
-            }
-            if (clipped.Top < top) yield return clipped with { Bottom = top };
-            if (clipped.Bottom > bottom) yield return clipped with { Top = bottom };
-            if (clipped.Left < left) yield return new(clipped.Left, top, left, bottom);
-            if (clipped.Right > right) yield return new(right, top, clipped.Right, bottom);
+            if (clipped.IsValid) yield return clipped;
         }
     }
 

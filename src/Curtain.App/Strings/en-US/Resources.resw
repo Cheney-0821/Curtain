@@ -418,7 +418,13 @@
   <data name="AutoUpdateHint" xml:space="preserve"><value>Download updates in the background; choose when to install.</value></data>
   <data name="IdleProtectHint" xml:space="preserve"><value>Automatically cover private content when your computer is idle.</value></data>
   <data name="IdleMinutesHint" xml:space="preserve"><value>How long to wait without keyboard or mouse activity.</value></data>
-  <data name="IdleScopeHint" xml:space="preserve"><value>Protect added windows or all connected displays.</value></data>
+  <data name="IdleScopeHint" xml:space="preserve"><value>Choose added windows or which displays to protect.</value></data>
+  <data name="ScopePrimaryDisplay" xml:space="preserve"><value>Primary display only</value></data>
+  <data name="ScopeDisplayNumber" xml:space="preserve"><value>Display {0}</value></data>
+  <data name="ScopeNamedDisplay" xml:space="preserve"><value>Display {0} · {1}</value></data>
+  <data name="ScopeDisplayOffline" xml:space="preserve"><value>{0} (disconnected)</value></data>
+  <data name="ScopeSelectedDisplay" xml:space="preserve"><value>Selected display</value></data>
+  <data name="ScopeDisplayUnavailable" xml:space="preserve"><value>The selected display is unavailable. Connect it or choose a different protection scope.</value></data>
   <data name="ScreenHotkeyHint" xml:space="preserve"><value>Toggle full-screen protection or end automatic protection.</value></data>
   <data name="HotkeyHint" xml:space="preserve"><value>Press the shortcut to start picking, then click a window to confirm.</value></data>
   <data name="ProtectionAutomationTitle" xml:space="preserve"><value>Automatic protection and shortcuts</value></data>

@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using Microsoft.UI.Dispatching;
 using Curtain.Core.Geometry;
 using Curtain.Core.Protection;
+using Curtain.Core.Settings;
 
 namespace Curtain.App.Services;
 
@@ -12,6 +13,7 @@ internal sealed class ScreenPrivacyManager : IDisposable
     private readonly Dictionary<nint, (ScreenRect Bounds, ScreenPrivacyWindow Window)> _overlays = new();
     private bool _enabled;
     private bool _disposed;
+    private ScreenProtectionTarget _target = new();
     private readonly DispatcherQueue _dispatcher;
     private FullScreenZOrderGuard? _zOrderGuard;
     private readonly Dictionary<nint, long> _lastUnresolvedRaise = new();
@@ -32,10 +34,13 @@ internal sealed class ScreenPrivacyManager : IDisposable
         _controlTimer.Tick += UpdateRestoreControl;
     }
 
-    internal void Enable(bool animate = true)
+    internal bool Enable(ScreenProtectionTarget target, bool animate = true)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        if (_enabled) { RefreshDisplays(); return; }
+        if (_enabled) return true;
+        var displays = PrivacyNative.Displays();
+        if (!displays.Any(display => target.Includes(display.IsPrimary, display.DeviceId))) return false;
+        _target = target;
         _operationId = CurtainDiagnostics.NewOperationId();
         CurtainDiagnostics.Write("fullscreen.enable.started", operationId: _operationId,
             stage: "screen-protection", reasonCode: animate ? "Animated" : "Immediate");
@@ -46,7 +51,7 @@ internal sealed class ScreenPrivacyManager : IDisposable
         CurtainRuntimeStatus.SetFullScreen(true, _overlays.Count);
         try
         {
-            RefreshDisplaysCore(showNewImmediately: false);
+            RefreshDisplaysCore(displays, showNewImmediately: false);
             long? batchStart = animate ? OverlayOpacityFade.CaptureBatchStart() : null;
             foreach (var (bounds, overlay) in _overlays.Values)
             {
@@ -59,6 +64,7 @@ internal sealed class ScreenPrivacyManager : IDisposable
             _controlTimer.Start();
             CurtainDiagnostics.Write("fullscreen.enable.completed", operationId: _operationId,
                 stage: "screen-protection", reasonCode: "Success");
+            return true;
         }
         catch (Exception ex)
         {
@@ -74,7 +80,10 @@ internal sealed class ScreenPrivacyManager : IDisposable
         }
     }
 
-    internal void RefreshDisplays() => RefreshDisplaysCore(showNewImmediately: true);
+    internal void RefreshDisplays(IReadOnlyList<ScreenRect> displays)
+    {
+        if (_enabled) RefreshDisplaysCore(displays, showNewImmediately: true);
+    }
 
     private void UpdateRestoreControl(DispatcherQueueTimer sender, object args)
     {
@@ -104,9 +113,9 @@ internal sealed class ScreenPrivacyManager : IDisposable
                 animate: visible == 0 || visible == bounds.Monitor.ToInt64());
     }
 
-    private void RefreshDisplaysCore(bool showNewImmediately)
+    private void RefreshDisplaysCore(IReadOnlyList<ScreenRect> connected, bool showNewImmediately)
     {
-        var displays = PrivacyNative.Displays();
+        var displays = connected.Where(display => _target.Includes(display.IsPrimary, display.DeviceId)).ToArray();
         var valid = displays.Select(d => d.Monitor).ToHashSet();
         var created = new List<(nint Monitor, ScreenPrivacyWindow Window)>();
         try

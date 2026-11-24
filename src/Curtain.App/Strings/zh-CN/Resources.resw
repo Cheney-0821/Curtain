@@ -31,7 +31,7 @@
     <value>添加窗口</value>
   </data>
   <data name="ProtectScreenButton" xml:space="preserve">
-    <value>保护整个屏幕</value>
+    <value>保护屏幕</value>
   </data>
   <data name="RestoreScreenButton" xml:space="preserve">
     <value>恢复屏幕</value>
@@ -418,7 +418,13 @@
   <data name="AutoUpdateHint" xml:space="preserve"><value>后台下载更新，安装时间由你决定。</value></data>
   <data name="IdleProtectHint" xml:space="preserve"><value>电脑闲置时自动遮挡隐私内容。</value></data>
   <data name="IdleMinutesHint" xml:space="preserve"><value>等待键盘和鼠标无操作的时长。</value></data>
-  <data name="IdleScopeHint" xml:space="preserve"><value>选择窗口保护或所有显示器。</value></data>
+  <data name="IdleScopeHint" xml:space="preserve"><value>选择已添加的窗口或要保护的显示器。</value></data>
+  <data name="ScopePrimaryDisplay" xml:space="preserve"><value>仅主显示器</value></data>
+  <data name="ScopeDisplayNumber" xml:space="preserve"><value>显示器 {0}</value></data>
+  <data name="ScopeNamedDisplay" xml:space="preserve"><value>显示器 {0} · {1}</value></data>
+  <data name="ScopeDisplayOffline" xml:space="preserve"><value>{0}（未连接）</value></data>
+  <data name="ScopeSelectedDisplay" xml:space="preserve"><value>所选显示器</value></data>
+  <data name="ScopeDisplayUnavailable" xml:space="preserve"><value>所选显示器当前不可用。连接该显示器或选择其他保护范围。</value></data>
   <data name="ScreenHotkeyHint" xml:space="preserve"><value>切换全屏保护，或结束自动保护。</value></data>
   <data name="HotkeyHint" xml:space="preserve"><value>按下组合键进入选窗，单击目标确认。</value></data>
   <data name="ProtectionAutomationTitle" xml:space="preserve"><value>自动保护与快捷键</value></data>

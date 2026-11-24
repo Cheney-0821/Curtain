@@ -132,7 +132,7 @@ internal sealed partial class CurtainWindow
             HideAreaPin();
             return false;
         }
-        if (bounds.Left < _primaryPinBounds.Right && bounds.Right > _primaryPinBounds.Left &&
+        if (_primaryPinBounds.IsValid && bounds.Left < _primaryPinBounds.Right && bounds.Right > _primaryPinBounds.Left &&
             bounds.Top < _primaryPinBounds.Bottom && bounds.Bottom > _primaryPinBounds.Top)
         {
             int top = Math.Min(viewport.Bottom - bounds.Height, _primaryPinBounds.Bottom + 2);

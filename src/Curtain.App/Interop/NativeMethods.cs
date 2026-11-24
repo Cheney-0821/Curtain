@@ -31,6 +31,7 @@ internal static class NativeMethods
     public const uint SWP_SHOWWINDOW = 0x0040;
     public const uint SWP_NOOWNERZORDER = 0x0200;
     public const int SW_HIDE = 0;
+    public const int SW_SHOWNOACTIVATE = 4;
     public const int SW_RESTORE = 9;
     public const uint WM_SIZE = 0x0005;
     public const uint WM_HOTKEY = 0x0312;
@@ -68,6 +69,7 @@ internal static class NativeMethods
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(nint hwnd);
     [DllImport("user32.dll")] public static extern bool IsIconic(nint hwnd);
     [DllImport("user32.dll")] public static extern bool IsZoomed(nint hwnd);
+    [DllImport("user32.dll")] private static extern bool IsWindowArranged(nint hwnd);
     [DllImport("user32.dll")] public static extern bool IsWindowEnabled(nint hwnd);
     [DllImport("user32.dll")] public static extern bool IsHungAppWindow(nint hwnd);
     [DllImport("user32.dll")] public static extern nint GetForegroundWindow();
@@ -112,6 +114,8 @@ internal static class NativeMethods
     [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int virtualKey);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(nint hwnd, out Rect bounds);
     [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(nint hwnd, int attribute, out Rect bounds, int size);
+    [DllImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")]
+    private static extern int GetDwmWindowFlag(nint hwnd, int attribute, out int value, int size);
     [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(nint hwnd, int attribute, ref int value, int size);
     [DllImport("user32.dll")] public static extern bool ShowWindow(nint hwnd, int command);
     [DllImport("user32.dll")] public static extern bool PostMessageW(nint hwnd, uint message, nint wParam, nint lParam);
@@ -168,6 +172,31 @@ internal static class NativeMethods
         return rect.IsValid ? rect : null;
     }
 
+    internal static bool HasSnappedWindowAbove(nint target, PixelRect targetBounds, PixelRect space, int dpi)
+    {
+        if (!IsWindowArranged(target)) return false;
+        const int dwmwaCloaked = 14;
+        int seamTolerance = (int)Math.Ceiling(12 * dpi / 96.0);
+        nint shell = GetShellWindow();
+        nint window = GetTopWindow(0);
+        for (int count = 0; window != 0 && count < 512; count++, window = GetWindow(window, GwHwndNext))
+        {
+            if (window == target || window == shell || !IsWindowVisible(window) || IsIconic(window) ||
+                !GetWindowRect(window, out var raw) || !Intersects(raw.ToPixelRect()) ||
+                (GetWindowLongPtr(window, GWL_EXSTYLE).ToInt64() & (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE)) != 0 ||
+                !IsWindowArranged(window) ||
+                (GetDwmWindowFlag(window, dwmwaCloaked, out int cloaked, sizeof(int)) == 0 && cloaked != 0))
+                continue;
+            if (GetVisibleBounds(window) is { } bounds && Intersects(bounds) &&
+                bounds.Top < targetBounds.Top && Math.Abs(bounds.Bottom - targetBounds.Top) <= seamTolerance)
+                return true;
+        }
+        return false;
+
+        bool Intersects(PixelRect bounds) => bounds.Left < space.Right && bounds.Right > space.Left &&
+            bounds.Top < space.Bottom && bounds.Bottom > space.Top;
+    }
+
     public static void RemoveWindowChrome(nint hwnd)
     {
         long style = GetWindowLongPtr(hwnd, GWL_STYLE).ToInt64();
@@ -198,7 +227,7 @@ internal static class NativeMethods
     }
 
     public static bool MoveProtectedWindows(nint target, PixelRect rawTarget, nint curtain,
-        PixelRect visibleTarget, nint pin, PixelRect pinBounds)
+        PixelRect visibleTarget, nint pin, PixelRect pinBounds, bool showPin)
     {
         // All three are top-level windows with the desktop as parent. Ownership is separate.
         nint batch = BeginDeferWindowPos(3);
@@ -208,7 +237,7 @@ internal static class NativeMethods
             visibleTarget.Width, visibleTarget.Height, overlayFlags);
         if (batch == 0) return false; // Failed DeferWindowPos must not be ended.
         batch = DeferWindowPos(batch, pin, 0, pinBounds.Left, pinBounds.Top,
-            pinBounds.Width, pinBounds.Height, overlayFlags);
+            pinBounds.Width, pinBounds.Height, showPin ? overlayFlags : overlayFlags & ~SWP_SHOWWINDOW);
         if (batch == 0) return false;
         batch = DeferWindowPos(batch, target, 0, rawTarget.Left, rawTarget.Top, 0, 0,
             SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);

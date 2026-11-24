@@ -99,22 +99,33 @@ var monitor = new PixelRect(0, 0, 1920, 1080);
 var work = new PixelRect(0, 0, 1920, 1040);
 var ordinary = new PixelRect(400, 200, 1000, 800);
 var dock = PinPlacement.Calculate(ordinary, work, monitor, 96, false);
-Check(!dock.IsInside && dock.Bounds == new PixelRect(664, 170, 736, 196),
-    "handle centered outside ordinary window with four pixel gap");
+Check(!dock.IsInside && dock.Bounds == new PixelRect(664, 168, 736, 194),
+    "handle centered outside ordinary window with six pixel host gap");
+var stacked = PinPlacement.Calculate(ordinary, work, monitor, 96, false, outsideOccupied: true);
+Check(stacked.IsInside && stacked.Bounds == new PixelRect(664, 200, 736, 226) &&
+      PinPlacement.RevealBounds(stacked, ordinary, work, 96) == new PixelRect(400, 200, 1000, 210),
+    "stacked window clips the handle at its own edge and reveals across the full top");
+var edgeSpanning = ordinary with { Left = -120, Top = -4 };
+var edgePin = PinPlacement.Calculate(edgeSpanning, work, monitor, 144, false);
+Check(edgePin.Bounds.Top == work.Top &&
+      PinPlacement.RevealBounds(edgePin, edgeSpanning, work, 144) == new PixelRect(0, 0, 1000, 15),
+    "reveal strip scales with DPI and is clipped to the visible part of the window");
+Check(!PinPlacement.RevealBounds(dock, ordinary, work, 96).IsValid,
+    "an outward window handle needs no reveal edge");
 var atTop = PinPlacement.Calculate(ordinary with { Top = 0 }, work, monitor, 96, false);
-Check(atTop.IsInside && atTop.Bounds.Top == 4, "top edge falls back inside work area");
+Check(atTop.IsInside && atTop.Bounds.Top == 0, "top edge falls back inside work area");
 var maximized = PinPlacement.Calculate(new PixelRect(-8, -8, 1928, 1048), work, monitor, 96, true);
 Check(maximized.IsInside && maximized.Bounds.Top >= work.Top && maximized.Bounds.Right <= work.Right,
     "maximized handle stays reachable in work area");
 var fullScreen = PinPlacement.Calculate(monitor, work, monitor, 96, false);
-Check(fullScreen.IsFullScreen && fullScreen.IsInside && fullScreen.Bounds.Top == 4,
+Check(fullScreen.IsFullScreen && fullScreen.IsInside && fullScreen.Bounds.Top == 0,
     "full screen handle uses inward placement");
 var negativeMonitor = new PixelRect(-1920, -100, 0, 980);
 var negativeDock = PinPlacement.Calculate(bounds, negativeMonitor, negativeMonitor, 96, false);
-Check(!negativeDock.IsInside && negativeDock.Bounds.Left == -736 && negativeDock.Bounds.Top == -10,
+Check(!negativeDock.IsInside && negativeDock.Bounds.Left == -736 && negativeDock.Bounds.Top == -12,
     "negative screen coordinates preserve outside center");
 var scaled = PinPlacement.Calculate(ordinary, work, monitor, 144, false);
-Check(scaled.Bounds.Width == 108 && scaled.Bounds.Height == 39 && scaled.Bounds.Bottom == 194,
+Check(scaled.Bounds.Width == 108 && scaled.Bounds.Height == 39 && scaled.Bounds.Bottom == 191,
     "150 percent dpi scales hit area and gap");
 var tiny = PinPlacement.Calculate(new PixelRect(0, 0, 18, 12), work, monitor, 96, false);
 Check(tiny.IsInside && tiny.Bounds == new PixelRect(0, 0, 18, 12),
@@ -300,6 +311,23 @@ try
     var custom = new CurtainUserSettings { AutoProtection = new AutoProtectionSettings(true, 5, AutoProtectionScope.AllDisplays) };
     b38Store.Save(custom);
     Check(b38Store.Load().Settings.AutoProtection == custom.AutoProtection, "idle protection preferences roundtrip");
+    Check(b38Store.Load().Settings.ManualScreenTarget.Includes(false, null),
+        "older profiles default to manually protecting all displays");
+    var secondary = new ScreenProtectionTarget(DisplayId: "monitor-b", DisplayLabel: "Display 2");
+    var primary = new ScreenProtectionTarget(PrimaryOnly: true);
+    b38Store.Save(custom with
+    {
+        ManualScreenTarget = secondary,
+        AutoProtection = custom.AutoProtection with { DisplayTarget = primary }
+    });
+    var displaySettings = b38Store.Load().Settings;
+    Check(displaySettings.ManualScreenTarget == secondary && displaySettings.AutoProtection.DisplayTarget == primary,
+        "independent manual and idle display selections survive settings reload");
+    Check(secondary.Includes(false, "MONITOR-B") && !secondary.Includes(true, "monitor-a") &&
+          !secondary.Includes(false, "same-display-number") && !secondary.Includes(false, null),
+        "specific display identity matches without falling back when disconnected");
+    Check(primary.Includes(true, "monitor-a") && !primary.Includes(false, "monitor-b"),
+        "primary display selection follows the current Windows primary role");
     b38Store.Save(custom with { WindowProtection = new WindowProtectionSettings(20, false, 0.87) });
     Check(b38Store.Load().Settings.WindowProtection.GentleAmount == 0.87,
         "saved light preference survives settings store while strong is selected");

@@ -13,10 +13,10 @@
   <img alt="Windows x64" src="https://img.shields.io/badge/Windows-x64-0078D4?style=flat-square" />
   <img alt="WinUI 3" src="https://img.shields.io/badge/WinUI-3-536DFE?style=flat-square" />
   <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-6A4C93?style=flat-square" />
-  <img alt="Stable 0.4.3" src="https://img.shields.io/badge/release-稳定版%200.4.3-2e8b57?style=flat-square" />
+  <img alt="Stable 0.4.4" src="https://img.shields.io/badge/release-稳定版%200.4.4-2e8b57?style=flat-square" />
 </p>
 
-**[下载 Windows 稳定版](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.4.3-Setup.exe)** · **[GitHub 发布页](https://github.com/Cheney-0821/Curtain/releases/tag/v0.4.3)** · **[English](README.md)**
+**[下载 Windows 稳定版](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.4.4-Setup.exe)** · **[GitHub 发布页](https://github.com/Cheney-0821/Curtain/releases/tag/v0.4.4)** · **[English](README.md)**
 
 <sub>Windows x64 · 稳定版 · 支持 Windows 10 与 Windows 11</sub>
 
@@ -79,7 +79,7 @@ Curtain 可以根据键盘、鼠标的无操作时长自动开启保护。**什�
 - **空闲自动保护：** 在自动保护期间临时恢复某个窗口，下一次再次达到空闲时长会重新遮挡它。
 - **更新不打扰：** 后台自动检查和下载更新，安装与重启由你确认。
 - **最小化更顺手：** 最小化后保留在任务栏，点击关闭仍会收至系统托盘。
-- **记住常用应用：** 保存应用保护规则，Curtain 或 Windows 重启后仍保留；应用再次启动时自动重新绑定匹配窗口。
+- **自动保存应用保护：** 重启后仍保留应用的保护设置和清晰区域。选择「移除保护」可一并清除。
 - **诊断与反馈：** 保留本地诊断记录，按需生成并主动提交诊断包；上传失败时 ZIP 仍保留在本机。
 - **全屏控件：** 鼠标移到屏幕上方四分之一区域可唤出恢复按钮；离开该区域或静止 1 秒后淡出。
 - **自定义快捷键：** 全屏保护默认使用 `Ctrl+↓`，选窗默认使用 `Alt+S`，两者都可修改。鼠标后退/前进键可选作全屏开关，默认关闭。
@@ -87,7 +87,7 @@ Curtain 可以根据键盘、鼠标的无操作时长自动开启保护。**什�
 
 ## 安装与使用
 
-1. 从上方下载 [Windows x64 稳定版安装程序](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.4.3-Setup.exe)。安装包目前**未签名**，Windows 可能提示未知发布者；请核实来源，不要为了安装关闭系统安全防护。
+1. 从上方下载 [Windows x64 稳定版安装程序](https://curtain-updates.cheneylab.cn/beta/CurtainPrivacy-0.4.4-Setup.exe)。安装包目前**未签名**，Windows 可能提示未知发布者；请核实来源，不要为了安装关闭系统安全防护。
 2. 启动 Curtain，选择「添加窗口」或「保护整个屏幕」。
 3. 如需离开工位后自动保护，在「设置」中开启空闲自动保护并选择时长及范围。
 
@@ -115,7 +115,7 @@ Curtain 是一种**视觉隐私遮罩**，并非 Windows 系统锁屏，也不�
 
 Curtain 源码已在 GitHub 公开，并采用 **GPL-3.0-only** 许可证。欢迎通过 [GitHub Issues](https://github.com/Cheney-0821/Curtain/issues) 报告问题或提出改进建议。
 
-当前稳定版安装包与应用内更新源由上方官方更新域名提供。请查看 [GitHub 发布页](https://github.com/Cheney-0821/Curtain/releases/tag/v0.4.3) 获取版本说明、源码提交 SHA、资产校验值及 GitHub 下载。
+当前稳定版安装包与应用内更新源由上方官方更新域名提供。请查看 [GitHub 发布页](https://github.com/Cheney-0821/Curtain/releases/tag/v0.4.4) 获取版本说明、源码提交 SHA、资产校验值及 GitHub 下载。
 
 ## 许可
 

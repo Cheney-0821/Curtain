@@ -27,6 +27,9 @@ public sealed class ClearArea
 
     public bool Contains(PixelPoint point) => Tiles.Any(tile => Contains(tile, point));
 
+    internal static ClearArea Restore(IReadOnlyList<PixelRect> tiles, bool isClear) =>
+        new(tiles.ToArray(), isClear);
+
     public AreaResizeEdge ResizeEdgeAt(PixelPoint point, int padding)
     {
         AreaEdge? horizontal = null, vertical = null;

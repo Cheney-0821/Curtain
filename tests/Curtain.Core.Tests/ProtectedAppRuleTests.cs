@@ -1,4 +1,5 @@
 using Curtain.Core.Protection;
+using Curtain.Core.Geometry;
 using Curtain.Core.Settings;
 
 /// <summary>Call Run() from the existing top-level Curtain.Core.Tests Program.cs.</summary>
@@ -135,6 +136,64 @@ internal static class ProtectedAppRuleTests
             File.WriteAllText(Path.Combine(interruptedDirectory, "protected-apps.json.tmp"), "incomplete-write");
             Check(new ProtectedAppRuleStore(interruptedDirectory).Load().Rules.Count == 1,
                 "incomplete temporary write does not replace the last valid rule file");
+
+            string layoutsDirectory = Path.Combine(root, "window-layouts");
+            var layoutsStore = new ProtectedAppRuleStore(layoutsDirectory);
+            var remembered = layoutsStore.Upsert(rule);
+            List<ClearArea> areas = [];
+            ClearArea.Add(areas, new(25, 35, 125, 65));
+            ClearArea.Add(areas, new(25, 60, 65, 100));
+            ClearArea.Add(areas, new(140, 50, 185, 82));
+            areas[1].IsClear = false;
+            var layout = new WindowClearLayout("ExampleWindow", 0,
+                areas.Select(area => new SavedClearArea(area.Tiles.ToArray(), area.IsClear)).ToArray());
+            var second = new WindowClearLayout("ExampleWindow", 1,
+                [new SavedClearArea([new PixelRect(4, 6, 44, 56)], true)], RequiresConfirmation: true);
+            Check(layoutsStore.SaveClearLayout(remembered.RuleId, layout) &&
+                  layoutsStore.SaveClearLayout(remembered.RuleId, second),
+                "save independent clear region layouts for two windows");
+            layoutsStore.Upsert(rule with { CustomProtection = null });
+            var restarted = new ProtectedAppRuleStore(layoutsDirectory);
+            var persisted = restarted.Load().Rules.Single();
+            var restored = persisted.ClearLayouts!.Single(savedLayout => savedLayout.Matches("examplewindow", 0)).Restore(false);
+            Check(persisted.RuleId == remembered.RuleId && restored.Count == 2 &&
+                  restored[0].Tiles.SequenceEqual(areas[0].Tiles) && restored[0].IsClear && !restored[1].IsClear &&
+                  restored[0].Contains(new(41, 91)) && !restored[0].Contains(new(90, 91)),
+                "restart restores window relative shape and open state after application settings change");
+            var uncertain = persisted.ClearLayouts!.Single(savedLayout => savedLayout.Slot == 1).Restore(false);
+            Check(uncertain.Single().Bounds == new PixelRect(4, 6, 44, 56) && !uncertain.Single().IsClear,
+                "a layout requiring confirmation restores the outline without exposing its content");
+            var moved = ClearArea.MoveOrResize(restored, restored[0], new(36, 42, 136, 107));
+            moved.IsClear = false;
+            var edited = layout with
+            {
+                Areas = restored.Select(area => new SavedClearArea(area.Tiles.ToArray(), area.IsClear)).ToArray()
+            };
+            Check(restarted.SaveClearLayout(remembered.RuleId, edited), "save a move and a change to region visibility");
+            var afterEdit = new ProtectedAppRuleStore(layoutsDirectory).Load().Rules.Single().ClearLayouts!;
+            Check(afterEdit.Count == 2 && afterEdit.Single(item => item.Slot == 0).Restore(false)
+                    .Any(area => area.Bounds == new PixelRect(36, 42, 136, 107) && !area.IsClear),
+                "reopening restores the last edit without duplicating or changing the other layout");
+            Check(restarted.SaveClearLayout(remembered.RuleId, layout with { Areas = [] }) &&
+                  new ProtectedAppRuleStore(layoutsDirectory).Load().Rules.Single().ClearLayouts!.Single().Slot == 1,
+                "deleting the last region removes only its window layout");
+            string layoutsPrimary = Path.Combine(layoutsDirectory, "protected-apps.json");
+            Directory.CreateDirectory(layoutsPrimary + ".tmp");
+            try
+            {
+                restarted.Remove(remembered.RuleId);
+                throw new Exception("FAIL: removal reported success after a storage error");
+            }
+            catch (UnauthorizedAccessException)
+            {
+                Check(restarted.Snapshot().Single().ClearLayouts!.Single().Slot == 1,
+                    "failed removal keeps the saved rule and layout in memory");
+            }
+            finally { Directory.Delete(layoutsPrimary + ".tmp"); }
+            Check(restarted.Remove(remembered.RuleId), "remove application and every saved layout");
+            File.WriteAllText(layoutsPrimary, "corrupt after removal");
+            Check(new ProtectedAppRuleStore(layoutsDirectory).Load().Rules.Count == 0,
+                "fallback backup does not revive a removed application or its clear regions");
         }
         finally
         {

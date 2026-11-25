@@ -67,6 +67,7 @@ internal sealed partial class CurtainWindow
         if (_areaResizeBounds == frame) return;
         if (!NativeMethods.PositionGeometry(_areaResizeWindow.Handle, frame, showWindow: true))
             throw new Win32Exception();
+        NativeMethods.EnsureAbove(_areaResizeWindow.Handle, Handle);
         _areaResizeBounds = frame;
     }
 
@@ -252,9 +253,12 @@ internal sealed partial class CurtainWindow
             _regionLayout = null;
             UpdateClearRegionSurface();
             if (edited != drag.Area)
+            {
                 CurtainDiagnostics.Write("overlay.clear-area.adjusted", operationId: _operationId,
                     stage: "window-protection", reasonCode: drag.Edge == AreaResizeEdge.None ? "Moved" : "Resized",
                     hwnd: Handle.ToInt64(), targetProcessId: (int)_protectedProcessId, sessionId: _sessionId, ruleId: _ruleId);
+                ClearRegionsChanged?.Invoke();
+            }
         }
         else if (hadLiveMask)
         {

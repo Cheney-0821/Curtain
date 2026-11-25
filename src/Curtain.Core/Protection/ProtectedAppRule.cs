@@ -87,6 +87,8 @@ public sealed record ProtectedAppRule
     public bool Enabled { get; init; } = true;
     /// <summary>Null means follow the current global protection defaults.</summary>
     public WindowProtectionSettings? CustomProtection { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<WindowClearLayout>? ClearLayouts { get; init; }
     public DateTimeOffset CreatedAtUtc { get; init; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAtUtc { get; init; } = DateTimeOffset.UtcNow;
 
@@ -108,6 +110,9 @@ public sealed record ProtectedAppRule
             Identity = identity,
             DisplayName = displayName,
             CustomProtection = CustomProtection is null ? null : WindowBlurScale.Normalize(CustomProtection),
+            ClearLayouts = ClearLayouts?.Where(layout => layout is { IsValid: true })
+                .DistinctBy(layout => (layout.WindowClass.ToUpperInvariant(), layout.Slot))
+                .Take(WindowClearLayout.MaxLayouts).ToArray(),
             CreatedAtUtc = CreatedAtUtc == default ? DateTimeOffset.UtcNow : CreatedAtUtc,
             UpdatedAtUtc = UpdatedAtUtc == default ? DateTimeOffset.UtcNow : UpdatedAtUtc
         };

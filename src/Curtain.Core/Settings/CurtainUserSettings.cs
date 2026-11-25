@@ -77,7 +77,7 @@ public sealed record CurtainUserSettings
     public PrivacyMouseButton PrivacyMouseButton { get; init; } = PrivacyMouseButton.Off;
     public string BlurPreset { get; init; } = OverlayBlurPreset.Standard;
     public string Language { get; init; } = AppLanguage.System;
-    public WindowProtectionSettings WindowProtection { get; init; } = new();
+    public WindowProtectionSettings WindowProtection { get; init; } = new(BlurAmount: 10, AllowClickThrough: false);
 }
 
 public sealed record CurtainUserSettingsLoad(CurtainUserSettings Settings, bool RecoveredFromInvalidFile);

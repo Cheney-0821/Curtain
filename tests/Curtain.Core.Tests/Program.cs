@@ -302,6 +302,8 @@ try
     var b38Store = new CurtainUserSettingsStore(b38Directory);
     Check(b38Store.Load().Settings.DiagnosticsEnabled && b38Store.Load().Settings.IncludeRawEtw,
         "new profiles enable local diagnostics and raw trace attachment by default");
+    Check(b38Store.Load().Settings.WindowProtection is { BlurAmount: 10, AllowClickThrough: false },
+        "a fresh settings directory defaults to medium blur with click-through off");
     b38Store.Save(new CurtainUserSettings { DiagnosticsEnabled = false, IncludeRawEtw = false });
     Check(!b38Store.Load().Settings.DiagnosticsEnabled && !b38Store.Load().Settings.IncludeRawEtw,
         "diagnostic opt-out survives the actual settings store");
@@ -328,9 +330,9 @@ try
         "specific display identity matches without falling back when disconnected");
     Check(primary.Includes(true, "monitor-a") && !primary.Includes(false, "monitor-b"),
         "primary display selection follows the current Windows primary role");
-    b38Store.Save(custom with { WindowProtection = new WindowProtectionSettings(20, false, 0.87) });
-    Check(b38Store.Load().Settings.WindowProtection.GentleAmount == 0.87,
-        "saved light preference survives settings store while strong is selected");
+    b38Store.Save(custom with { WindowProtection = new WindowProtectionSettings(20, true, 0.87) });
+    Check(b38Store.Load().Settings.WindowProtection is { BlurAmount: 20, AllowClickThrough: true, GentleAmount: 0.87 },
+        "saved blur, click-through, and fine adjustment override first-run defaults");
     b38Store.Save(custom with { PrivacyHotkey = new GlobalHotkeySettings(true, HotkeyModifier.Alt, 0x42) });
     Check(b38Store.Load().Settings.PrivacyHotkey.VirtualKey == 0x42,
         "privacy shortcut persists through the actual settings store");

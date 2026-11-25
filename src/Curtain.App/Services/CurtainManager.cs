@@ -1,6 +1,7 @@
 ﻿using System.Collections.ObjectModel;
 using Curtain.App.Interop;
 using Curtain.Core.Geometry;
+using Curtain.Core.Protection;
 using Curtain.Core.Sessions;
 using Curtain.Core.Settings;
 using Microsoft.UI.Dispatching;
@@ -26,6 +27,7 @@ internal sealed class CurtainManager : IDisposable
     public event Action<string>? Notice;
     public event Action? CollectionChanged;
     internal event Action<CurtainSession, PixelPoint, nint>? ProtectionMenuRequested;
+    internal event Action<CurtainSession>? ClearRegionsChanged;
     internal CurtainManager(DispatcherQueue dispatcher)
     {
         _dispatcher = dispatcher;
@@ -36,9 +38,10 @@ internal sealed class CurtainManager : IDisposable
         _watchdog.Start();
     }
     internal ProtectedWindowItem Attach(nint hwnd, bool initiallyClosed = true,
-        WindowProtectionSettings? customProtection = null, string? operationId = null, string? ruleId = null)
+        string? operationId = null, ProtectedAppRule? rule = null, int regionSlot = -1)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        string? ruleId = rule?.RuleId.ToString("N");
         operationId ??= CurtainDiagnostics.NewOperationId();
         WindowSelectionResult selection = WindowSelectionEvaluator.Evaluate(hwnd);
         if (!selection.IsSelectable)
@@ -74,12 +77,13 @@ internal sealed class CurtainManager : IDisposable
         CurtainSession? session = null;
         try
         {
-            session = new(target, _dispatcher, ProtectionDefaults, initiallyClosed, customProtection,
-                operationId, ruleId);
+            session = new(target, _dispatcher, ProtectionDefaults, initiallyClosed, rule?.CustomProtection,
+                operationId, rule, regionSlot);
             if (_idleForcedClosed) session.SetIdleForcedClosed(true);
             session.Ended += OnEnded;
             session.Notice += OnNotice;
             session.ProtectionMenuRequested += OnProtectionMenuRequested;
+            session.ClearRegionsChanged += OnClearRegionsChanged;
             _sessions.Add(identity.Handle, session);
             Windows.Add(session.Item);
             UpdateRuntimeWindowCounts();
@@ -150,6 +154,7 @@ internal sealed class CurtainManager : IDisposable
     }
 
     private void OnNotice(string message) => Notice?.Invoke(message);
+    private void OnClearRegionsChanged(CurtainSession session) => ClearRegionsChanged?.Invoke(session);
     private void OnProtectionMenuRequested(CurtainSession session, PixelPoint point, nint pinHandle) =>
         ProtectionMenuRequested?.Invoke(session, point, pinHandle);
 
@@ -176,6 +181,7 @@ internal sealed class CurtainManager : IDisposable
         session.Ended -= OnEnded;
         session.Notice -= OnNotice;
         session.ProtectionMenuRequested -= OnProtectionMenuRequested;
+        session.ClearRegionsChanged -= OnClearRegionsChanged;
         bool cleanupSucceeded = true;
         try
         {

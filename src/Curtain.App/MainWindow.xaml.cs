@@ -97,15 +97,15 @@ public sealed partial class MainWindow : Window
         _manager.CollectionChanged += UpdateSummary;
         _manager.Notice += OnNotice;
         _manager.ProtectionMenuRequested += OnProtectionMenuRequested;
+        _manager.ClearRegionsChanged += OnClearRegionsChanged;
         InitializeGlobalProtection();
         _appRuleBinder = new ProtectedAppRuleAutoBinder(
             DispatcherQueue,
             new ProtectedAppRuleStore(CurtainDiagnostics.DataDirectory),
             (hwnd, rule, operationId) =>
-                _manager.Attach(hwnd, initiallyClosed: false, customProtection: rule.CustomProtection,
-                    operationId: operationId, ruleId: rule.RuleId.ToString("N")),
+                _manager.Attach(hwnd, initiallyClosed: false, operationId: operationId, rule: rule,
+                    regionSlot: GetRegionSlot(hwnd, rule)),
             () => _manager.Windows.Select(item => (nint)item.Session.Target.Identity.Handle).ToArray());
-        RememberedAppsList.ItemsSource = _appRuleBinder.RuleItems;
         _appRuleBinder.RulesChanged += UpdateSummary;
 
         nint handle = WindowNative.GetWindowHandle(this);
@@ -253,7 +253,6 @@ public sealed partial class MainWindow : Window
     {
         if (_disposed) return;
         Localized.RefreshAll();
-        _appRuleBinder?.RefreshRuleItems();
         _globalProtection?.RefreshLanguage();
         RefreshLocalizedOptionControls();
         UpdateWindowTitle();
@@ -283,8 +282,6 @@ public sealed partial class MainWindow : Window
         Localized.SetContent(ProtectAllMenuItem, "ProtectAll");
         Localized.SetContent(PauseAllMenuItem, "PauseAll");
         Localized.SetText(EmptyText, "EmptyWindows");
-        Localized.SetText(RememberedAppsTitleText, "RememberedAppsTitle");
-        Localized.SetText(RememberedAppsDescriptionText, "RememberedAppsDescription");
         Localized.SetText(SettingsTitleText, "SettingsTitle");
         Localized.SetText(GeneralTitleText, "GeneralTitle");
         Localized.SetText(StartupLabelText, "StartupHeader");
@@ -509,12 +506,14 @@ public sealed partial class MainWindow : Window
         {
             try
             {
-                var item = _manager.Attach(target, operationId: _picker.OperationId);
-                WindowList.SelectedItem = item;
+                var existing = _appRuleBinder?.FindRememberedRule(target);
+                var item = _manager.Attach(target, operationId: _picker.OperationId, rule: existing,
+                    regionSlot: existing is null ? -1 : GetRegionSlot(target, existing));
                 ProtectedAppRule? rule = _appRuleBinder?.RememberSelectedWindow(target, item.Session.CustomProtection,
                     _picker.OperationId, item.Session.SessionId);
-                if (rule is not null) item.Session.AssociateRememberedRule(rule.RuleId);
-                else OnNotice("WindowAddedNotRemembered");
+                if (rule is not null && item.Session.RememberedRuleId != rule.RuleId)
+                    item.Session.AssociateRememberedRule(rule, GetRegionSlot(target, rule));
+                else if (rule is null && existing is null) OnNotice("WindowAddedNotRemembered");
                 session = item.Session;
             }
             catch (InvalidOperationException ex)
@@ -539,23 +538,58 @@ public sealed partial class MainWindow : Window
 
     private void OnPickerHandoffCompleted() => UpdateSummary();
 
+    private int GetRegionSlot(nint handle, ProtectedAppRule rule)
+    {
+        string windowClass = NativeMethods.ClassOf(handle);
+        var used = WindowsOfType(rule.RuleId, windowClass).Select(session => session.RegionSlot).ToHashSet();
+        return (rule.ClearLayouts ?? []).Where(layout => string.Equals(
+                layout.WindowClass, windowClass, StringComparison.OrdinalIgnoreCase))
+            .Select(layout => layout.Slot).Order()
+            .Concat(Enumerable.Range(0, WindowClearLayout.MaxLayouts))
+            .FirstOrDefault(slot => !used.Contains(slot), -1);
+    }
+
+    private IEnumerable<CurtainSession> WindowsOfType(Guid ruleId, string windowClass) =>
+        _manager.Windows.Select(item => item.Session).Where(session => !session.IsDestroyed &&
+            session.RememberedRuleId == ruleId && string.Equals(session.Target.Identity.ClassName,
+                windowClass, StringComparison.OrdinalIgnoreCase));
+
+    private void OnClearRegionsChanged(CurtainSession session)
+    {
+        if (session.RememberedRuleId is not { } id)
+        {
+            OnNotice("ClearRegionSaveFailed");
+            return;
+        }
+        bool ambiguous = WindowsOfType(id, session.Target.Identity.ClassName).Skip(1).Any();
+        if (_appRuleBinder?.SaveClearLayout(session, session.CaptureClearLayout(ambiguous)) != true)
+            OnNotice("ClearRegionSaveFailed");
+    }
+
     private void UpdateSummary()
     {
-        _appRuleBinder?.RefreshRuleItems();
-        var groups = _manager.Windows.GroupBy(item =>
-            ApplicationIdentityReader.TryRead((nint)item.Session.Target.Identity.Handle).Identity?.StableKey
-            ?? "window:" + item.Session.Target.Identity.Handle, StringComparer.OrdinalIgnoreCase).ToArray();
+        if (_disposed) return;
+        _appRuleBinder?.RefreshBindings();
+        var rules = (_appRuleBinder?.Rules ?? []).ToDictionary(rule => "rule:" + rule.RuleId.ToString("N"));
+        var groups = _manager.Windows.GroupBy(item => item.Session.RememberedRuleId is { } ruleId
+                ? "rule:" + ruleId.ToString("N")
+                : ApplicationIdentityReader.TryRead((nint)item.Session.Target.Identity.Handle).Identity?.StableKey
+                    ?? "window:" + item.Session.Target.Identity.Handle, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.OrdinalIgnoreCase);
+        var keys = rules.Keys.Concat(groups.Keys).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var old in _applications.ToArray())
-            if (!groups.Any(group => group.Key == old.Key))
+            if (!keys.Contains(old.Key))
             {
                 old.Dispose();
                 _applications.Remove(old);
             }
-        foreach (var group in groups)
+        foreach (var key in keys)
         {
-            var existing = _applications.FirstOrDefault(item => item.Key == group.Key);
-            if (existing is null) _applications.Add(new(group.Key, group.ToArray()));
-            else existing.Update(group.ToArray());
+            var rule = rules.GetValueOrDefault(key);
+            var members = groups.GetValueOrDefault(key) ?? [];
+            var existing = _applications.FirstOrDefault(item => string.Equals(item.Key, key, StringComparison.OrdinalIgnoreCase));
+            if (existing is null) _applications.Add(new(key, members, rule, _manager.ProtectionDefaults));
+            else existing.Update(members, rule, _manager.ProtectionDefaults);
         }
         Localized.SetText(CountText, "ApplicationCount", _applications.Count);
         bool hasWindows = _manager.Windows.Count > 0;
@@ -563,8 +597,8 @@ public sealed partial class MainWindow : Window
         PauseAllMenuItem.IsEnabled = hasWindows && !_picker.IsActive;
         WindowList.IsEnabled = !_picker.IsActive;
         PickButton.IsEnabled = !_picker.IsActive;
-        EmptyText.Visibility = hasWindows ? Visibility.Collapsed : Visibility.Visible;
-        WindowList.MinHeight = hasWindows ? 112 : 0;
+        EmptyText.Visibility = _applications.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
+        WindowList.MinHeight = _applications.Count > 0 ? 112 : 0;
     }
 
     private void OnNotice(string key)
@@ -811,7 +845,8 @@ public sealed partial class MainWindow : Window
                 bool usesGlobal = app.UsesGlobal;
                 follow.IsChecked = usesGlobal;
                 editor.SetSettings(app.ProtectionOptions);
-                editor.SetEditable(!usesGlobal);
+                follow.IsEnabled = app.HasWindows;
+                editor.SetEditable(app.HasWindows && !usesGlobal);
             }
             finally { applying = false; }
         }
@@ -853,6 +888,10 @@ public sealed partial class MainWindow : Window
     private CommunityToolkit.WinUI.Controls.SettingsCard CreateClearRegionCard(ProtectedApplicationItem app)
     {
         var button = new Button();
+        button.SetBinding(Control.IsEnabledProperty, new Microsoft.UI.Xaml.Data.Binding
+        {
+            Source = app, Path = new PropertyPath(nameof(ProtectedApplicationItem.HasWindows))
+        });
         Localized.SetContent(button, "ClearRegionEdit");
         var header = new TextBlock();
         var description = new TextBlock { TextWrapping = TextWrapping.Wrap };
@@ -904,7 +943,7 @@ public sealed partial class MainWindow : Window
             () =>
             {
                 if (session.IsDestroyed) return;
-                DetachWindow(session.Item);
+                RemoveApplicationProtection(app);
             });
     }
 
@@ -931,23 +970,18 @@ public sealed partial class MainWindow : Window
     private void OnRowDetach(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.Tag is not ProtectedApplicationItem app) return;
-        foreach (var item in app.Members.ToArray()) DetachWindow(item);
+        RemoveApplicationProtection(app);
     }
 
-    private void DetachWindow(ProtectedWindowItem item)
+    private void RemoveApplicationProtection(ProtectedApplicationItem app)
     {
-        _appRuleBinder?.SuppressWindow((nint)item.Session.Target.Identity.Handle);
-        _manager.Detach(item);
-    }
-
-    private void OnRememberedAppRemoveButtonLoaded(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button button) Localized.SetContent(button, "RememberedAppsRemove");
-    }
-
-    private void OnRemoveRememberedAppClick(object sender, RoutedEventArgs e)
-    {
-        if ((sender as FrameworkElement)?.Tag is Guid ruleId) _appRuleBinder?.RemoveRule(ruleId);
+        if (app.RuleId is { } ruleId && _appRuleBinder?.RemoveRule(ruleId) != true)
+        {
+            OnNotice("RemoveApplicationProtectionFailed");
+            return;
+        }
+        foreach (var item in app.Members.ToArray()) _manager.Detach(item);
+        UpdateSummary();
     }
 
     private void OnLanguageSelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -1298,10 +1332,11 @@ public sealed partial class MainWindow : Window
             SaveSettings(operationId);
         }
         _disposed = true;
+        if (_appRuleBinder is not null) _appRuleBinder.RulesChanged -= UpdateSummary;
         _appRuleBinder?.Dispose();
         _appRuleBinder = null;
         foreach (var app in _applications) app.Dispose();
-        if (_appRuleBinder is not null) _appRuleBinder.RulesChanged -= UpdateSummary;
+        _manager.ClearRegionsChanged -= OnClearRegionsChanged;
         DiagnosticsPageControl.Dispose();
         CurtainDiagnostics.Write("app.stopping", stage: "window-closed", reasonCode: "NormalExit");
         _autoUpdateTimer.Stop();

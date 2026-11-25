@@ -81,9 +81,11 @@ internal static class NativeZOrderCheck
             inside.Top, inside.Width, inside.Height, 0, 0, 0, 0);
         nint above = CreateWindowExW(noActivate | toolWindow | 0x8, "STATIC", "", popupStyle, inside.Left,
             inside.Top, 12, 12, 0, 0, 0, 0);
+        nint regionControl = CreateWindowExW(noActivate | toolWindow, "STATIC", "", popupStyle, inside.Left,
+            inside.Top, 18, 12, overlay, 0, 0, 0);
         try
         {
-            Check(target != 0 && overlay != 0 && pin != 0 && popup != 0 && above != 0,
+            Check(target != 0 && overlay != 0 && pin != 0 && popup != 0 && above != 0 && regionControl != 0,
                 "window and ownerless tool popup created");
             nint foreground = NativeMethods.GetForegroundWindow();
             uint thread = NativeMethods.GetWindowThreadProcessId(target, out uint process);
@@ -117,6 +119,8 @@ internal static class NativeZOrderCheck
             NativeMethods.ShowWindow(above, 4);
             Check(NativeMethods.KeepAboveNormalWindows(overlay, pin), "overlay and pin raised before popup opens");
             Check(IsAbove(above, pin) && IsAbove(pin, overlay), "unrelated always-on-top window stays above the pin and overlay");
+            Check(NativeMethods.EnsureAbove(regionControl, overlay) && IsAbove(regionControl, overlay) &&
+                !NativeMethods.IsWindowVisible(regionControl), "hidden clear-area control joins the overlay band without appearing");
             NativeMethods.SetWindowPos(popup, 0, inside.Left, inside.Top, inside.Width, inside.Height,
                 NativeMethods.SWP_SHOWWINDOW | NativeMethods.SWP_NOACTIVATE);
             Check(IsAbove(overlay, popup), "newly shown popup starts below overlay without a correction");
@@ -129,9 +133,20 @@ internal static class NativeZOrderCheck
                 (NativeMethods.GetWindowLongPtr(pin, NativeMethods.GWL_EXSTYLE).ToInt64() & 0x8) == 0 &&
                 NativeMethods.GetForegroundWindow() == foreground,
                 "overlay and pin return to normal Z-order without changing foreground");
+            const uint orderOnly = NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE |
+                NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_NOOWNERZORDER;
+            Check(NativeMethods.SetWindowPos(regionControl, (nint)1, 0, 0, 0, 0, orderOnly) &&
+                IsAbove(overlay, regionControl),
+                "clear-area control can be displaced during reordering");
+            NativeMethods.ShowWindow(regionControl, NativeMethods.SW_SHOWNOACTIVATE);
+            Check(NativeMethods.EnsureAbove(regionControl, overlay) && IsAbove(regionControl, overlay) &&
+                NativeMethods.GetWindow(regionControl, NativeMethods.GW_OWNER) == overlay &&
+                NativeMethods.GetForegroundWindow() == foreground,
+                "clear-area control returns above the normal overlay and preserves focus and ownership");
         }
         finally
         {
+            if (regionControl != 0) DestroyWindow(regionControl);
             if (above != 0) DestroyWindow(above);
             if (popup != 0) DestroyWindow(popup);
             if (pin != 0) DestroyWindow(pin);

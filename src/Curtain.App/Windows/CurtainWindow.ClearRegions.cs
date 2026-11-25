@@ -4,6 +4,7 @@ using Curtain.App.Interop;
 using Curtain.App.Localization;
 using Curtain.App.Services;
 using Curtain.Core.Geometry;
+using Curtain.Core.Protection;
 using Windows.UI;
 using Windows.UI.Composition;
 
@@ -33,6 +34,19 @@ internal sealed partial class CurtainWindow
     private (Vector2 Size, float Scale, bool UseAreas)? _regionLayout;
 
     internal bool IsEditingClearRegions => _regionDraft is not null;
+    internal event Action? ClearRegionsChanged;
+
+    internal SavedClearArea[] CaptureClearRegions() =>
+        _clearRegions.Select(area => new SavedClearArea(area.Tiles.ToArray(), area.IsClear)).ToArray();
+
+    internal void RestoreClearRegions(List<ClearArea> regions)
+    {
+        _clearRegions = regions;
+        _regionLayout = null;
+        if (IsVisible) UpdateClearRegionSurface();
+        RebuildRegionOutlines();
+        RefreshClearAreaControl();
+    }
     private float RegionScale => Math.Max(96, NativeMethods.GetDpiForWindow(Handle)) / 96f;
 
     internal void AllowClearRegions(bool allowed, PixelRect? coveredPopup = null)
@@ -198,10 +212,13 @@ internal sealed partial class CurtainWindow
             return;
         }
         if (save)
+        {
             CurtainDiagnostics.Write("overlay.clear-regions.saved", operationId: _operationId,
                 stage: "window-protection", reasonCode: "Saved", hwnd: Handle.ToInt64(),
                 ownerHwnd: _protectedWindowHandle, targetProcessId: (int)_protectedProcessId,
                 metricName: "RegionCount", metricValue: _clearRegions.Count, sessionId: _sessionId, ruleId: _ruleId);
+            ClearRegionsChanged?.Invoke();
+        }
         try { _input.SetPointerPassthrough(_settings.AllowClickThrough); }
         finally { finished?.Invoke(save); }
         if (wasForeground && NativeMethods.IsWindow((nint)_protectedWindowHandle))

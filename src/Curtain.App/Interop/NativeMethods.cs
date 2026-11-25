@@ -340,6 +340,24 @@ internal static class NativeMethods
             return false;
         }
 
+        return ReorderAbove(window, anchor);
+    }
+
+    internal static bool EnsureAbove(nint window, nint anchor)
+    {
+        bool topmost = IsTopmost(anchor);
+        if (IsTopmost(window) == topmost)
+        {
+            nint previous = GetWindow(anchor, GW_HWNDPREV);
+            for (int count = 0; previous != 0 && IsTopmost(previous) == topmost && count < 512;
+                 count++, previous = GetWindow(previous, GW_HWNDPREV))
+                if (previous == window) return true;
+        }
+        return ReorderAbove(window, anchor);
+    }
+
+    private static bool ReorderAbove(nint window, nint anchor)
+    {
         bool anchorIsTopmost = IsTopmost(anchor);
         if (!anchorIsTopmost && !ReturnToNormalZOrder(window)) return false;
         nint prev = GetWindow(anchor, GW_HWNDPREV);

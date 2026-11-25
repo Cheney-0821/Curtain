@@ -444,9 +444,9 @@
   <data name="FineTuneBlur" xml:space="preserve"><value>Fine-tune</value></data>
   <data name="NavigationDiagnostics" xml:space="preserve"><value>Diagnostics</value></data>
   <data name="WindowAddedNotRemembered" xml:space="preserve"><value>Window added, but the application identity could not be read, so no remembered rule was created.</value></data>
-  <data name="RememberedAppsTitle" xml:space="preserve"><value>Remembered apps</value></data>
-  <data name="RememberedAppsDescription" xml:space="preserve"><value>Rules remain after the app or Windows closes. When the app starts again, Curtain restores its protection controls with the overlay initially uncovered.</value></data>
-  <data name="RememberedAppsRemove" xml:space="preserve"><value>Forget app</value></data>
+  <data name="ApplicationNotRunning" xml:space="preserve"><value>No windows open</value></data>
+  <data name="ClearRegionSaveFailed" xml:space="preserve"><value>Couldn't save the clear area. It is still available in the current window.</value></data>
+  <data name="RemoveApplicationProtectionFailed" xml:space="preserve"><value>Couldn't remove protection for this app. Try again.</value></data>
   <data name="RememberedAppRemoved" xml:space="preserve"><value>Remembered app rule removed.</value></data>
   <data name="RememberedAppActive" xml:space="preserve"><value>Bound to {0} window(s)</value></data>
   <data name="RememberedAppWaiting" xml:space="preserve"><value>Waiting for the app</value></data>
@@ -523,7 +523,7 @@
   <data name="ClearRegionEdit" xml:space="preserve"><value>Edit areas</value></data>
   <data name="ClearRegionDrawPrompt" xml:space="preserve"><value>Draw a rectangle</value></data>
   <data name="ClearRegionDrawMenu" xml:space="preserve"><value>Draw a clear area</value></data>
-  <data name="RemoveWindowProtection" xml:space="preserve"><value>Remove protection from this window</value></data>
+  <data name="RemoveWindowProtection" xml:space="preserve"><value>Remove protection from this app</value></data>
   <data name="ClearRegionWindowOption" xml:space="preserve"><value>{0}. {1}</value></data>
   <data name="ClearRegionRemove" xml:space="preserve"><value>Remove this area</value></data>
   <data name="ClearRegionRemoveAll" xml:space="preserve"><value>Remove all areas</value></data>

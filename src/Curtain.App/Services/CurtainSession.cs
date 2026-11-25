@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Curtain.App.Interop;
 using Curtain.App.Windows;
 using Curtain.Core.Geometry;
+using Curtain.Core.Protection;
 using Curtain.Core.Sessions;
 using Curtain.Core.Settings;
 using Microsoft.UI.Dispatching;
@@ -41,12 +42,22 @@ internal sealed class CurtainSession : IDisposable
     private string? _ruleId;
     internal string OperationId => _operationId;
     internal string? RuleId => _ruleId;
-    internal void AssociateRememberedRule(Guid ruleId)
+    internal Guid? RememberedRuleId => Guid.TryParse(_ruleId, out var id) ? id : null;
+    internal int RegionSlot { get; private set; } = -1;
+    internal void AssociateRememberedRule(ProtectedAppRule rule, int slot)
     {
-        if (_disposed) return;
-        _ruleId = ruleId.ToString("N");
+        if (_disposed || (RememberedRuleId == rule.RuleId && RegionSlot == slot)) return;
+        _ruleId = rule.RuleId.ToString("N");
+        RegionSlot = slot;
         _curtain?.AssociateRememberedRule(_ruleId);
+        var layouts = (rule.ClearLayouts ?? []).Where(layout => string.Equals(
+            layout.WindowClass, Target.Identity.ClassName, StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (layouts.FirstOrDefault(layout => layout.Slot == slot) is { } saved)
+            _curtain?.RestoreClearRegions(saved.Restore(ambiguous: layouts.Length > 1));
     }
+
+    internal WindowClearLayout CaptureClearLayout(bool requiresConfirmation) =>
+        new(Target.Identity.ClassName, RegionSlot, _curtain?.CaptureClearRegions() ?? [], requiresConfirmation);
 
     private nint Handle => (nint)Target.Identity.Handle;
     public ProtectedTarget Target { get; }
@@ -54,15 +65,16 @@ internal sealed class CurtainSession : IDisposable
     public bool IsDestroyed => _disposed || _hooks?.IsDestroyed == true;
     public event Action<CurtainSession, string>? Ended;
     internal event Action<CurtainSession, PixelPoint, nint>? ProtectionMenuRequested;
+    internal event Action<CurtainSession>? ClearRegionsChanged;
     public event Action<string>? Notice;
     internal bool WaitForFirstFrame(Action callback) => _curtain?.WaitForFirstFrame(callback) == true;
 
     internal CurtainSession(ProtectedTarget target, DispatcherQueue dispatcher, WindowProtectionSettings defaults,
         bool initiallyClosed = true, WindowProtectionSettings? customProtection = null,
-        string? operationId = null, string? ruleId = null)
+        string? operationId = null, ProtectedAppRule? rule = null, int regionSlot = -1)
     {
         _operationId = operationId ?? CurtainDiagnostics.NewOperationId();
-        _ruleId = ruleId;
+        _ruleId = rule?.RuleId.ToString("N");
         _defaults = defaults;
         CustomProtection = customProtection is null ? null : WindowBlurScale.Normalize(customProtection);
         Target = target;
@@ -107,6 +119,8 @@ internal sealed class CurtainSession : IDisposable
             _curtain.SurfaceMoved += OnMoved;
             _curtain.SurfaceEnded += CancelGesture;
             _curtain.ProtectionMenuRequested += RequestProtectionMenu;
+            _curtain.ClearRegionsChanged += OnClearRegionsChanged;
+            if (rule is not null) AssociateRememberedRule(rule, regionSlot);
             _pin = new PinWindow();
             _pin.ToggleRequested += Toggle;
             _pin.ContextMenuRequested += RequestPinMenu;
@@ -158,6 +172,7 @@ internal sealed class CurtainSession : IDisposable
         throw new InvalidOperationException("无法设置保护窗口的归属，未完成绑定。");
     }
     private void OnRenderFailed() { if (!_disposed) Ended?.Invoke(this, "OverlayErrorWindowRemoved"); }
+    private void OnClearRegionsChanged() => ClearRegionsChanged?.Invoke(this);
     private void OnFirstFramePresented() => CurtainDiagnostics.Write("overlay.first-frame-presented",
         operationId: _operationId, stage: "curtain-window-paint", reasonCode: "Success",
         hwnd: Target.Identity.Handle, targetProcessId: (int)Target.Identity.ProcessId,
@@ -381,6 +396,7 @@ internal sealed class CurtainSession : IDisposable
             nint pinAnchor = Target.IsClosed || _curtain.IsVisible ? _curtain.Handle : Handle;
             NativeMethods.PositionAbove(_pin.Handle, pinAnchor, placement.Bounds, showWindow: !placement.IsInside);
         }
+        _curtain.SyncAreaControlZOrder();
         _pinRevealBounds = PinPlacement.RevealBounds(placement, bounds.Value,
             placement.IsFullScreen ? monitor.Monitor : monitor.Work, dpi);
         if (_pinRevealBounds.IsValid)
@@ -543,6 +559,7 @@ internal sealed class CurtainSession : IDisposable
                 curtain.FirstFramePresented -= OnFirstFramePresented;
                 curtain.SurfacePressed -= OnPressed; curtain.SurfaceMoved -= OnMoved;
                 curtain.ProtectionMenuRequested -= RequestProtectionMenu;
+                curtain.ClearRegionsChanged -= OnClearRegionsChanged;
                 curtain.SurfaceEnded -= CancelGesture;
             });
             Release("overlay-hide", curtain.CancelAndHide);

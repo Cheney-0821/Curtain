@@ -22,6 +22,15 @@ internal sealed partial class CurtainWindow
     internal void SetPrimaryPinBounds(PixelRect bounds) => _primaryPinBounds = bounds;
     internal bool OwnsAreaControl(nint hwnd) => _areaPin?.Handle == hwnd || _areaResizeWindow?.Handle == hwnd;
 
+    internal void SyncAreaControlZOrder()
+    {
+        // Protection can change Z-order bands when the target gains or loses focus.
+        if (_areaResizeBounds.HasValue && _areaResizeWindow is { } resize)
+            NativeMethods.EnsureAbove(resize.Handle, Handle);
+        if (_areaPin is { IsVisible: true } pin)
+            NativeMethods.EnsureAbove(pin.Handle, Handle);
+    }
+
     private void RefreshClearAreaControl()
     {
         UpdateOutlineLayout();
@@ -85,7 +94,10 @@ internal sealed partial class CurtainWindow
         var screen = new PixelPoint(cursor.X, cursor.Y);
         var local = new PixelPoint(cursor.X - rect.Left, cursor.Y - rect.Top);
         float scale = RegionScale;
-        bool overPin = _hoveredArea is not null && ClearArea.Contains(_areaPinBounds, screen);
+        bool overPin = _hoveredArea is { } previous && ClearArea.Contains(_areaPinBounds with
+        {
+            Bottom = Math.Max(_areaPinBounds.Bottom, viewport.Top + (int)MathF.Round(previous.Bounds.Top * scale) + 1)
+        }, screen);
         var area = _hoveredArea;
         if (!overPin && _areaPin?.IsPressed != true)
         {
@@ -126,7 +138,7 @@ internal sealed partial class CurtainWindow
     private bool PositionAreaPin(ClearArea area, PixelRect viewport, float scale)
     {
         var layout = (viewport, scale, _primaryPinBounds);
-        if (_hoveredArea == area && _areaPinLayout == layout) return true;
+        if (_hoveredArea == area && _areaPinLayout == layout && _areaPin?.IsVisible == true) return true;
         if (area.ControlBounds(viewport, scale) is not { } bounds)
         {
             HideAreaPin();
@@ -158,7 +170,8 @@ internal sealed partial class CurtainWindow
         bool show = _areaPin.IsVisible;
         if (!NativeMethods.PositionGeometry(_areaPin.Handle, bounds, show))
             throw new Win32Exception("Unable to position the clear-area control.");
-        if (!show) NativeMethods.ShowWindow(_areaPin.Handle, 4);
+        if (!NativeMethods.EnsureAbove(_areaPin.Handle, Handle)) return false;
+        if (!show) NativeMethods.ShowWindow(_areaPin.Handle, NativeMethods.SW_SHOWNOACTIVATE);
         _hoveredArea = area;
         _areaPinLayout = layout;
         _areaPinBounds = bounds;
@@ -200,5 +213,6 @@ internal sealed partial class CurtainWindow
             stage: "window-protection", reasonCode: area.IsClear ? "Clear" : "Blurred",
             hwnd: Handle.ToInt64(), ownerHwnd: _protectedWindowHandle,
             targetProcessId: (int)_protectedProcessId, sessionId: _sessionId, ruleId: _ruleId);
+        ClearRegionsChanged?.Invoke();
     }
 }

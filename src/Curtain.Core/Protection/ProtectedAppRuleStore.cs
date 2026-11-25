@@ -101,6 +101,7 @@ public sealed class ProtectedAppRuleStore
             if (!normalized.IsValid)
                 throw new ArgumentException("A valid stable application identity is required.", nameof(rule));
 
+            var updated = new List<ProtectedAppRule>(_rules);
             int index = _rules.FindIndex(existing =>
                 existing.RuleId == normalized.RuleId ||
                 string.Equals(existing.StableKey, normalized.StableKey, StringComparison.OrdinalIgnoreCase) ||
@@ -122,20 +123,45 @@ public sealed class ProtectedAppRuleStore
                 {
                     Identity = mergedIdentity.Normalize(),
                     RuleId = previous.RuleId,
+                    ClearLayouts = normalized.ClearLayouts ?? previous.ClearLayouts,
                     CreatedAtUtc = previous.CreatedAtUtc,
                     UpdatedAtUtc = DateTimeOffset.UtcNow
                 };
-                _rules[index] = normalized;
+                updated[index] = normalized;
             }
             else
             {
                 if (_rules.Count >= MaximumRules)
                     throw new InvalidOperationException("The maximum number of remembered applications has been reached.");
-                _rules.Add(normalized with { UpdatedAtUtc = DateTimeOffset.UtcNow });
+                updated.Add(normalized);
             }
 
-            SaveLocked();
+            SaveLocked(updated);
             return normalized;
+        }
+    }
+
+    public bool SaveClearLayout(Guid ruleId, WindowClearLayout layout)
+    {
+        if (layout.Areas.Count != 0 && !layout.IsValid)
+            throw new ArgumentException("Invalid clear region layout.", nameof(layout));
+        lock (_gate)
+        {
+            EnsureLoadedLocked();
+            int index = _rules.FindIndex(rule => rule.RuleId == ruleId);
+            if (index < 0) return false;
+            var rule = _rules[index];
+            var layouts = (rule.ClearLayouts ?? []).Where(saved => !saved.Matches(layout.WindowClass, layout.Slot)).ToList();
+            if (layout.Areas.Count != 0)
+            {
+                if (layouts.Count >= WindowClearLayout.MaxLayouts)
+                    throw new InvalidOperationException("The maximum number of clear region layouts has been reached.");
+                layouts.Add(layout);
+            }
+            var updated = new List<ProtectedAppRule>(_rules);
+            updated[index] = rule with { ClearLayouts = layouts.ToArray(), UpdatedAtUtc = DateTimeOffset.UtcNow };
+            SaveLocked(updated, refreshBackup: layout.Areas.Count == 0);
+            return true;
         }
     }
 
@@ -144,9 +170,9 @@ public sealed class ProtectedAppRuleStore
         lock (_gate)
         {
             EnsureLoadedLocked();
-            int removed = _rules.RemoveAll(rule => rule.RuleId == ruleId);
-            if (removed == 0) return false;
-            SaveLocked();
+            var updated = _rules.Where(rule => rule.RuleId != ruleId).ToList();
+            if (updated.Count == _rules.Count) return false;
+            SaveLocked(updated, refreshBackup: true);
             return true;
         }
     }
@@ -160,11 +186,11 @@ public sealed class ProtectedAppRuleStore
         lock (_gate)
         {
             EnsureLoadedLocked();
-            int removed = _rules.RemoveAll(rule =>
-                string.Equals(rule.StableKey, key, StringComparison.OrdinalIgnoreCase) ||
-                ProtectedAppRuleMatcher.CanUpdateRule(rule.Identity, identity));
-            if (removed == 0) return false;
-            SaveLocked();
+            var updated = _rules.Where(rule =>
+                !string.Equals(rule.StableKey, key, StringComparison.OrdinalIgnoreCase) &&
+                !ProtectedAppRuleMatcher.CanUpdateRule(rule.Identity, identity)).ToList();
+            if (updated.Count == _rules.Count) return false;
+            SaveLocked(updated, refreshBackup: true);
             return true;
         }
     }
@@ -231,14 +257,14 @@ public sealed class ProtectedAppRuleStore
         }
     }
 
-    private void SaveLocked()
+    private void SaveLocked(List<ProtectedAppRule> updated, bool refreshBackup = false)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
         var document = new ProtectedAppRulesDocument
         {
             SchemaVersion = CurrentSchemaVersion,
             UpdatedAtUtc = DateTimeOffset.UtcNow,
-            Rules = _rules.ToList()
+            Rules = updated
         };
         byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(document, _json);
         if (bytes.Length > MaximumFileBytes)
@@ -254,7 +280,7 @@ public sealed class ProtectedAppRuleStore
                 stream.Flush(flushToDisk: true);
             }
 
-            if (File.Exists(_path) && !_preserveBackup)
+            if (File.Exists(_path) && !_preserveBackup && !refreshBackup)
             {
                 try { File.Copy(_path, _backupPath, overwrite: true); }
                 catch (IOException) { /* Primary remains intact; backup is best-effort. */ }
@@ -262,8 +288,15 @@ public sealed class ProtectedAppRuleStore
             }
 
             File.Move(temporary, _path, overwrite: true);
+            _rules = updated;
             _preserveBackup = false;
             _loaded = true;
+            if (refreshBackup)
+            {
+                try { File.Copy(_path, _backupPath, overwrite: true); }
+                catch (IOException) { /* Primary was committed. */ }
+                catch (UnauthorizedAccessException) { /* Primary was committed. */ }
+            }
         }
         finally
         {

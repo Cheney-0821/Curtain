@@ -444,9 +444,9 @@
   <data name="FineTuneBlur" xml:space="preserve"><value>微调</value></data>
   <data name="NavigationDiagnostics" xml:space="preserve"><value>诊断与反馈</value></data>
   <data name="WindowAddedNotRemembered" xml:space="preserve"><value>窗口已添加，但无法读取应用身份，未创建记忆规则。</value></data>
-  <data name="RememberedAppsTitle" xml:space="preserve"><value>记住的应用</value></data>
-  <data name="RememberedAppsDescription" xml:space="preserve"><value>应用关闭或电脑重启后，规则仍会保留。应用再次启动时自动添加保护开关，初始保持揭帘。</value></data>
-  <data name="RememberedAppsRemove" xml:space="preserve"><value>移除记忆</value></data>
+  <data name="ApplicationNotRunning" xml:space="preserve"><value>当前未打开窗口</value></data>
+  <data name="ClearRegionSaveFailed" xml:space="preserve"><value>无法保存清晰区域。本次窗口仍可使用该区域。</value></data>
+  <data name="RemoveApplicationProtectionFailed" xml:space="preserve"><value>无法移除该应用的保护，请重试。</value></data>
   <data name="RememberedAppRemoved" xml:space="preserve"><value>已移除应用记忆规则。</value></data>
   <data name="RememberedAppActive" xml:space="preserve"><value>已绑定 {0} 个窗口</value></data>
   <data name="RememberedAppWaiting" xml:space="preserve"><value>等待应用启动</value></data>
@@ -523,7 +523,7 @@
   <data name="ClearRegionEdit" xml:space="preserve"><value>编辑区域</value></data>
   <data name="ClearRegionDrawPrompt" xml:space="preserve"><value>请绘制区域</value></data>
   <data name="ClearRegionDrawMenu" xml:space="preserve"><value>绘制清晰区域</value></data>
-  <data name="RemoveWindowProtection" xml:space="preserve"><value>移除此窗口的保护</value></data>
+  <data name="RemoveWindowProtection" xml:space="preserve"><value>移除此应用的保护</value></data>
   <data name="ClearRegionWindowOption" xml:space="preserve"><value>{0}. {1}</value></data>
   <data name="ClearRegionRemove" xml:space="preserve"><value>移除此区域</value></data>
   <data name="ClearRegionRemoveAll" xml:space="preserve"><value>移除所有区域</value></data>

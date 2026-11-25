@@ -2,7 +2,6 @@
 using Curtain.Core.Protection;
 using Curtain.Core.Sessions;
 using Curtain.Core.Settings;
-using System.Collections.ObjectModel;
 using Microsoft.UI.Dispatching;
 
 namespace Curtain.App.Services;
@@ -18,17 +17,18 @@ internal sealed class ProtectedAppRuleAutoBinder : IDisposable
     private readonly Func<nint, ProtectedAppRule, string, ProtectedWindowItem?> _attach;
     private readonly Func<IEnumerable<nint>> _activeWindowHandles;
     private readonly HashSet<long> _boundHandles = new();
-    private readonly HashSet<long> _suppressedHandles = new();
     private readonly Dictionary<long, Guid> _boundRuleByHandle = new();
     private readonly Dictionary<long, WindowIdentity> _boundIdentityByHandle = new();
-    private readonly Dictionary<long, WindowIdentity> _suppressedIdentityByHandle = new();
     private readonly Dictionary<long, string> _lastFailureByHandle = new();
     private readonly Dictionary<long, (WindowIdentity Identity, long RetryAfter)> _attachRetryByHandle = new();
     private bool _disposed;
 
     internal event Action? RulesChanged;
-    public ObservableCollection<ProtectedAppRuleListItem> RuleItems { get; } = new();
     internal IReadOnlyList<ProtectedAppRule> Rules => _store.Snapshot();
+
+    internal ProtectedAppRule? FindRememberedRule(nint hwnd) =>
+        ApplicationIdentityReader.TryRead(hwnd) is { Success: true, Identity: { } identity }
+            ? ProtectedAppRuleMatcher.FindMatch(Rules, identity) : null;
 
     internal ProtectedAppRuleAutoBinder(
         DispatcherQueue dispatcher,
@@ -51,7 +51,6 @@ internal sealed class ProtectedAppRuleAutoBinder : IDisposable
         if (loaded.RecoveredFromBackup || loaded.RecoveredFromInvalidEntries)
             CurtainDiagnostics.Write("rules.recovered", CurtainDiagnosticLevel.Warning,
                 stage: "protected-app-store", reasonCode: loaded.RecoveryCode ?? "Recovered");
-        RefreshRuleItems();
         _watcher.Start();
     }
 
@@ -80,8 +79,6 @@ internal sealed class ProtectedAppRuleAutoBinder : IDisposable
                 CustomProtection = customProtection,
                 Enabled = true
             });
-            _suppressedHandles.Remove(hwnd.ToInt64());
-            _suppressedIdentityByHandle.Remove(hwnd.ToInt64());
             _attachRetryByHandle.Remove(hwnd.ToInt64());
             if (TargetWindow.Read(hwnd) is { } targetIdentity)
                 _boundIdentityByHandle[hwnd.ToInt64()] = targetIdentity;
@@ -90,8 +87,6 @@ internal sealed class ProtectedAppRuleAutoBinder : IDisposable
             CurtainDiagnostics.Write("rules.remembered", operationId: operationId,
                 stage: "protected-app-store", reasonCode: "Success", hwnd: hwnd.ToInt64(),
                 sessionId: sessionId, ruleId: rule.RuleId.ToString("N"));
-            RefreshRuleItems();
-            RulesChanged?.Invoke();
             return rule;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
@@ -102,23 +97,6 @@ internal sealed class ProtectedAppRuleAutoBinder : IDisposable
                 hwnd: hwnd.ToInt64(), sessionId: sessionId);
             return null;
         }
-    }
-
-    /// <summary>
-    /// Prevents the watcher from immediately reattaching an HWND the user just removed.
-    /// Suppression ends when that HWND is destroyed; a later application launch can bind again.
-    /// </summary>
-    internal void SuppressWindow(nint hwnd)
-    {
-        if (_disposed || hwnd == nint.Zero) return;
-        long handle = hwnd.ToInt64();
-        _suppressedHandles.Add(handle);
-        if (TargetWindow.Read(hwnd) is { } identity)
-            _suppressedIdentityByHandle[handle] = identity;
-        _boundHandles.Remove(handle);
-        _boundIdentityByHandle.Remove(handle);
-        _boundRuleByHandle.Remove(handle);
-        RefreshRuleItems();
     }
 
     internal void UpdateWindowProtection(nint hwnd, WindowProtectionSettings? customProtection,
@@ -141,7 +119,6 @@ internal sealed class ProtectedAppRuleAutoBinder : IDisposable
             CurtainDiagnostics.Write("rules.settings-updated", operationId: operationId,
                 stage: "protected-app-store", reasonCode: customProtection is null ? "FollowGlobal" : "Custom",
                 hwnd: hwnd.ToInt64(), sessionId: sessionId, ruleId: existing.RuleId.ToString("N"));
-            RefreshRuleItems();
             RulesChanged?.Invoke();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
@@ -150,6 +127,23 @@ internal sealed class ProtectedAppRuleAutoBinder : IDisposable
             CurtainDiagnostics.WriteException("rules.settings-update.failed", ex,
                 operationId: operationId, stage: "protected-app-store", reasonCode: "StoreWriteFailed",
                 hwnd: hwnd.ToInt64(), sessionId: sessionId, ruleId: existing.RuleId.ToString("N"));
+        }
+    }
+
+    internal bool SaveClearLayout(CurtainSession session, WindowClearLayout layout)
+    {
+        if (_disposed || session.RememberedRuleId is not { } ruleId || session.RegionSlot < 0) return false;
+        try
+        {
+            return _store.SaveClearLayout(ruleId, layout);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or
+                                   InvalidOperationException or System.Security.SecurityException)
+        {
+            CurtainDiagnostics.WriteException("rules.clear-regions.save-failed", ex,
+                operationId: session.OperationId, stage: "protected-app-store", ruleId: session.RuleId,
+                sessionId: session.SessionId);
+            return false;
         }
     }
 
@@ -164,10 +158,8 @@ internal sealed class ProtectedAppRuleAutoBinder : IDisposable
             {
                 CurtainDiagnostics.Write("rules.removed", operationId: operationId,
                     stage: "protected-app-store", reasonCode: "UserRequested", ruleId: ruleId.ToString("N"));
-                RefreshRuleItems();
-                RulesChanged?.Invoke();
             }
-            return removed;
+            return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.Security.SecurityException)
         {
@@ -185,27 +177,21 @@ internal sealed class ProtectedAppRuleAutoBinder : IDisposable
         if (eventType == 0x8001) // EVENT_OBJECT_DESTROY
         {
             _boundHandles.Remove(hwnd.ToInt64());
-            _suppressedHandles.Remove(hwnd.ToInt64());
             _boundIdentityByHandle.Remove(hwnd.ToInt64());
-            _suppressedIdentityByHandle.Remove(hwnd.ToInt64());
             _boundRuleByHandle.Remove(hwnd.ToInt64());
             _lastFailureByHandle.Remove(hwnd.ToInt64());
             _attachRetryByHandle.Remove(hwnd.ToInt64());
-            RefreshRuleItems();
             return;
         }
 
         long handle = hwnd.ToInt64();
-        if (_boundHandles.Contains(handle) || _suppressedHandles.Contains(handle))
+        if (_boundHandles.Contains(handle))
         {
             WindowIdentity? currentIdentity = TargetWindow.Read(hwnd);
             bool sameBound = _boundIdentityByHandle.TryGetValue(handle, out WindowIdentity bound) && currentIdentity == bound;
-            bool sameSuppressed = _suppressedIdentityByHandle.TryGetValue(handle, out WindowIdentity suppressed) && currentIdentity == suppressed;
-            if (sameBound || sameSuppressed) return;
+            if (sameBound) return;
             _boundHandles.Remove(handle);
-            _suppressedHandles.Remove(handle);
             _boundIdentityByHandle.Remove(handle);
-            _suppressedIdentityByHandle.Remove(handle);
             _boundRuleByHandle.Remove(handle);
         }
         if (!NativeMethods.IsWindow(hwnd) || !NativeMethods.IsWindowVisible(hwnd)) return;
@@ -259,8 +245,6 @@ internal sealed class ProtectedAppRuleAutoBinder : IDisposable
                     stage: "auto-bind", reasonCode: "Success", hwnd: hwnd.ToInt64(),
                     processName: read.ProcessName, sessionId: attached.Session.SessionId,
                     ruleId: rule.RuleId.ToString("N"));
-                RefreshRuleItems();
-                RulesChanged?.Invoke();
             }
             else
             {
@@ -277,43 +261,15 @@ internal sealed class ProtectedAppRuleAutoBinder : IDisposable
     }
 
 
-    internal void RefreshRuleItems()
+    internal void RefreshBindings()
     {
         if (_disposed) return;
-        try
+        var activeHandles = _activeWindowHandles().Select(hwnd => hwnd.ToInt64()).ToHashSet();
+        foreach (long staleHandle in _boundRuleByHandle.Keys.Where(handle => !activeHandles.Contains(handle)).ToArray())
         {
-            var activeHandles = _activeWindowHandles().Select(hwnd => hwnd.ToInt64()).ToHashSet();
-            foreach (long staleHandle in _boundRuleByHandle.Keys.Where(handle => !activeHandles.Contains(handle)).ToArray())
-            {
-                _boundRuleByHandle.Remove(staleHandle);
-                _boundHandles.Remove(staleHandle);
-                _boundIdentityByHandle.Remove(staleHandle);
-            }
-
-            var activeCounts = new Dictionary<Guid, int>();
-            foreach (Guid ruleId in _boundRuleByHandle.Values)
-                activeCounts[ruleId] = activeCounts.GetValueOrDefault(ruleId) + 1;
-
-            var current = _store.Snapshot();
-            foreach (ProtectedAppRuleListItem old in RuleItems.ToArray())
-                if (!current.Any(rule => rule.RuleId == old.RuleId)) RuleItems.Remove(old);
-
-            foreach (ProtectedAppRule rule in current)
-            {
-                int count = activeCounts.GetValueOrDefault(rule.RuleId);
-                ProtectedAppRuleListItem? item = RuleItems.FirstOrDefault(existing => existing.RuleId == rule.RuleId);
-                if (item is null) RuleItems.Add(new(rule, count));
-                else
-                {
-                    item.Update(rule, count);
-                    item.RefreshLocalization();
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            CurtainDiagnostics.WriteException("rules.list-refresh.failed", ex,
-                stage: "rule-list-refresh", reasonCode: "RefreshFailed");
+            _boundRuleByHandle.Remove(staleHandle);
+            _boundHandles.Remove(staleHandle);
+            _boundIdentityByHandle.Remove(staleHandle);
         }
     }
 
@@ -350,10 +306,8 @@ internal sealed class ProtectedAppRuleAutoBinder : IDisposable
         _disposed = true;
         _watcher.Dispose();
         _boundHandles.Clear();
-        _suppressedHandles.Clear();
         _boundRuleByHandle.Clear();
         _boundIdentityByHandle.Clear();
-        _suppressedIdentityByHandle.Clear();
         _lastFailureByHandle.Clear();
         _attachRetryByHandle.Clear();
     }
